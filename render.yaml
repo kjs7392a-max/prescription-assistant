@@ -1,0 +1,36 @@
+# Render Blueprint — 한 번에 web 서비스 + Postgres + 환경변수 자동 설정
+# 사용: render.com → New → Blueprint → GitHub repo 선택 → Apply
+#
+# 이 Blueprint는:
+#  1. prescription-assistant 라는 Python 웹 서비스 생성
+#  2. prescription-db 라는 무료 Postgres 인스턴스 생성
+#  3. DATABASE_URL을 web 서비스에 자동 주입
+#  4. ANTHROPIC_API_KEY는 배포 시 사용자가 입력 (sync:false)
+
+services:
+  - type: web
+    name: prescription-assistant
+    runtime: python
+    plan: free
+    region: singapore     # 한국에서 가장 가까운 무료 리전
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: APP_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false        # 배포 시 직접 입력
+      - key: DATABASE_URL
+        fromDatabase:
+          name: prescription-db
+          property: connectionString
+
+databases:
+  - name: prescription-db
+    plan: free
+    databaseName: prescription
+    user: prescription
+    region: singapore
