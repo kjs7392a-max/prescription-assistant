@@ -1,0 +1,1765 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>의사 모니터 · 처방 보조</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💊</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; }
+  .page { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+
+  .queue-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .queue-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 16px;
+    background: #fff; border: 1px solid var(--border);
+    font-size: 11.5px; cursor: pointer; flex-shrink: 0;
+  }
+  .queue-pill.active { background: var(--blue-600); color: #fff; border-color: var(--blue-600); font-weight: 700; }
+  .queue-pill .n {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--blue-50); color: var(--blue-700);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800;
+  }
+  .queue-pill.active .n { background: #fff; color: var(--blue-700); }
+
+  .patient-head {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+    padding: 10px 12px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  .patient-head .name { font-size: 15px; font-weight: 800; color: var(--text); }
+  .patient-head .meta { font-size: 11.5px; color: var(--text-dim); }
+  .patient-head .tag {
+    padding: 2px 7px; font-size: 10.5px; font-weight: 700;
+    border-radius: 3px; white-space: nowrap;
+  }
+  .patient-head .tag.red { background: var(--red-bg); color: var(--red); border: 1px solid #f3bebb; }
+  .patient-head .tag.orange { background: var(--orange-bg); color: var(--orange); border: 1px solid #f3c898; }
+  .patient-head .tag.blue { background: var(--blue-50); color: var(--blue-700); border: 1px solid var(--blue-200); }
+
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 720px) { .info-grid { grid-template-columns: 1fr; } }
+  .info-block {
+    background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 12px;
+  }
+  .info-block h3 {
+    margin: 0 0 6px; font-size: 11px; font-weight: 700;
+    color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .info-block .content { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+  .lab-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; }
+  .lab-row .name { color: var(--text-muted); }
+  .lab-row .val { font-weight: 700; color: var(--text); font-family: "JetBrains Mono", monospace; }
+  .lab-row .val.low { color: var(--orange); }
+  .lab-row .val.high { color: var(--red); }
+
+  /* 진단+처방전 2분할 */
+  .two-col {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch;
+  }
+  @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+
+  .note-panel, .rx-panel {
+    border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .note-panel { background: var(--surface); }
+  .rx-panel   { background: var(--surface-2); }
+
+  .note-panel textarea {
+    flex: 1; width: 100%; border: none;
+    padding: 10px 12px; resize: none; min-height: 130px;
+    font-size: 13px; font-family: inherit; background: transparent;
+  }
+  .note-panel textarea:focus { outline: none; background: #fcfdfe; }
+
+  .note-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 8px 5px 10px; background: var(--surface-2);
+    border-top: 1px solid var(--border); font-size: 10.5px; color: var(--text-muted);
+  }
+  .btn-save {
+    padding: 4px 14px; font-size: 11px; font-weight: 700;
+    background: var(--blue-600); color: #fff;
+    border: none; border-radius: 5px; cursor: pointer; transition: background 0.15s;
+  }
+  .btn-save:hover { background: var(--blue-700); }
+  .btn-save.saved { background: var(--green); }
+
+  .rx-content {
+    flex: 1; margin: 0; padding: 10px 12px;
+    font-family: "JetBrains Mono", monospace; font-size: 12px;
+    white-space: pre-wrap; color: var(--text-dim); line-height: 1.65;
+    overflow-y: auto;
+  }
+  .rx-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    text-align: center; color: var(--text-muted); font-size: 11.5px;
+    line-height: 1.7; padding: 20px;
+  }
+
+
+  .analysis-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px; background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .analysis-head .badge {
+    padding: 3px 8px; font-size: 10.5px; font-weight: 700;
+    border-radius: 3px; color: #fff;
+  }
+  .drug-row {
+    display: grid; grid-template-columns: 65px 1fr; gap: 10px;
+    padding: 9px 12px; align-items: start;
+    border-bottom: 1px solid var(--divider);
+  }
+  .drug-row:last-child { border-bottom: none; }
+  .drug-row .main { min-width: 0; }
+  .drug-row .name-line { font-weight: 700; font-size: 13.5px; color: var(--text); }
+  .drug-row .name-line .spec {
+    font-weight: 400; font-size: 11.5px; color: var(--text-muted); margin-left: 6px;
+  }
+  .drug-row .findings { margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
+  .drug-row .finding { font-size: 11.5px; color: var(--text-dim); }
+  .drug-row .finding .ev { color: var(--text-muted); font-size: 10.5px; margin-left: 4px; }
+
+  .rec-item { padding: 10px 12px; border-bottom: 1px solid var(--divider); }
+  .rec-item:last-child { border-bottom: none; }
+  .rec-target { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .rec-target b { color: var(--red); }
+  .rec-opt {
+    display: flex; align-items: start; gap: 10px;
+    padding: 7px 10px; background: var(--surface-2);
+    border: 1px solid var(--border-soft); border-radius: 5px;
+    margin-top: 5px;
+  }
+  .rec-opt.first { border-color: var(--green); background: var(--green-bg); }
+  .rec-opt .rank {
+    padding: 2px 8px; font-size: 10.5px; font-weight: 700;
+    border-radius: 3px; color: #fff; white-space: nowrap;
+  }
+  .rec-opt.first .rank { background: var(--green); }
+  .rec-opt.second .rank { background: var(--blue-600); }
+  .rec-opt .body { flex: 1; font-size: 12px; }
+  .rec-opt .body .nm { font-weight: 700; color: var(--text); }
+  .rec-opt .body .dose { color: var(--text-muted); font-family: "JetBrains Mono", monospace; font-size: 11px; margin-left: 4px; }
+  .rec-opt .body .why { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .sev-summary { display: flex; gap: 4px; flex-wrap: wrap; }
+  .sev-summary .s {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 3px; font-size: 10.5px; font-weight: 700;
+    color: #fff; white-space: nowrap;
+  }
+  .sev-summary .s b { font-size: 12px; }
+
+  .empty-hero { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+  .empty-hero .icon { font-size: 36px; margin-bottom: 10px; opacity: 0.5; }
+
+  /* 신호등 종합 위험도 카드 */
+  .risk-summary-card {
+    display: flex; align-items: stretch; gap: 0;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .traffic-light {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 5px; padding: 14px 16px;
+    background: #1a2332; flex-shrink: 0; min-width: 54px;
+  }
+  .tl-dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+  }
+  .tl-dot.on-red    { background: var(--red);    box-shadow: 0 0 8px var(--red); }
+  .tl-dot.on-orange { background: var(--orange);  box-shadow: 0 0 8px var(--orange); }
+  .tl-dot.on-yellow { background: var(--yellow);  box-shadow: 0 0 8px var(--yellow); }
+  .tl-dot.on-green  { background: var(--green);   box-shadow: 0 0 8px var(--green); }
+
+  .risk-body { flex: 1; padding: 10px 14px; background: var(--surface); }
+  .risk-headline { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .risk-label { font-size: 14px; font-weight: 800; }
+  .risk-label.critical { color: var(--red); }
+  .risk-label.high     { color: var(--orange); }
+  .risk-label.warn     { color: var(--yellow); }
+  .risk-label.ok       { color: var(--green); }
+  .risk-counts { display: flex; gap: 5px; flex-wrap: wrap; }
+  .risk-counts .rc {
+    padding: 2px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 700; color: #fff;
+  }
+
+  .ddi-section { margin-top: 8px; border-top: 1px solid var(--divider); padding-top: 8px; }
+  .ddi-title { font-size: 10.5px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 5px; }
+  .ddi-item {
+    display: flex; align-items: baseline; gap: 7px;
+    padding: 4px 0; border-bottom: 1px dashed var(--divider); font-size: 11.5px;
+  }
+  .ddi-item:last-child { border-bottom: none; }
+  .ddi-pair { font-weight: 700; color: var(--text); white-space: nowrap; }
+  .ddi-reason { color: var(--text-dim); line-height: 1.4; flex: 1; }
+  .ddi-ev { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+
+  /* GDMT 단계별 가이드라인 권고 */
+  .gdmt-item {
+    padding: 10px 12px; border-bottom: 1px solid var(--divider);
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .gdmt-item:last-child { border-bottom: none; }
+  .gdmt-left { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .gdmt-p {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff; flex-shrink: 0;
+  }
+  .gdmt-p.p1 { background: var(--blue-700, #1555a0); }
+  .gdmt-p.p2 { background: var(--blue-600); }
+  .gdmt-p.p3 { background: var(--text-muted); }
+  .gdmt-p.p4 { background: var(--orange); }
+  .gdmt-p.p5 { background: #7c3aed; }   /* 정신과 — 보라 */
+
+  /* GDMT 단계 의미 범례 */
+  .gdmt-legend {
+    display: flex; flex-wrap: wrap; gap: 6px 12px;
+    padding: 8px 12px; background: #f8fafc;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 10.5px; color: var(--text-dim); line-height: 1.4;
+  }
+  .gdmt-legend .lg-item { display: inline-flex; align-items: center; gap: 5px; }
+  .gdmt-legend .lg-item b { color: var(--text); font-weight: 800; }
+  .gdmt-legend .lg-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .gdmt-legend .lg-dot.p1 { background: var(--blue-700, #1555a0); }
+  .gdmt-legend .lg-dot.p2 { background: var(--blue-600); }
+  .gdmt-legend .lg-dot.p3 { background: var(--text-muted); }
+  .gdmt-legend .lg-dot.p4 { background: var(--orange); }
+  .gdmt-legend .lg-dot.p5 { background: #7c3aed; }
+
+  /* [🔄 재분석] 버튼 — AI 카드 우측 상단 */
+  .btn-reanalyze {
+    margin-left: auto; padding: 4px 10px; font-size: 11px; font-weight: 700;
+    background: #fff; color: var(--blue-700);
+    border: 1px solid var(--blue-200); border-radius: 4px;
+    cursor: pointer; transition: all 0.12s;
+  }
+  .btn-reanalyze:hover { background: var(--blue-50); border-color: var(--blue-600); }
+  .btn-reanalyze:active { transform: translateY(1px); }
+  .btn-reanalyze:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 각 GDMT 항목 좌측 컬럼의 단계 의미 텍스트 */
+  .gdmt-meaning {
+    margin-top: 4px; font-size: 10px; font-weight: 600;
+    color: var(--text-muted); line-height: 1.3;
+    text-align: center; max-width: 70px;
+  }
+  .gdmt-spec { font-size: 9.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+  .gdmt-body { flex: 1; min-width: 0; }
+  .gdmt-guide { font-size: 10px; color: var(--blue-600); font-weight: 700; margin-bottom: 3px; }
+  .gdmt-drug { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .gdmt-drug .action { font-size: 10px; font-weight: 600; color: #fff; background: var(--blue-600); border-radius: 3px; padding: 1px 5px; margin-right: 5px; vertical-align: middle; }
+  .gdmt-reason { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+
+  /* Clinical Evidence 접기/펼치기 블록 */
+  details.ev-block { margin-top: 5px; }
+  details.ev-block > summary {
+    font-size: 10.5px; font-weight: 700; color: var(--blue-600);
+    cursor: pointer; user-select: none; list-style: none;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  details.ev-block > summary::-webkit-details-marker { display: none; }
+  details.ev-block > summary::before { content: "▶"; font-size: 8px; display: inline-block; transition: transform 0.15s; }
+  details.ev-block[open] > summary::before { transform: rotate(90deg); }
+  .ev-body {
+    background: var(--blue-50, #edf5ff); border: 1px solid var(--blue-200, #bee3f8);
+    border-radius: 4px; padding: 7px 10px; margin-top: 4px; font-size: 11px; line-height: 1.55;
+  }
+  .ev-rationale { margin: 0 0 5px; color: var(--text-dim); }
+  .ev-refs { margin: 0; padding: 0; list-style: none; }
+  .ev-refs li { color: var(--text-muted); font-size: 10.5px; }
+  .ev-refs li + li { margin-top: 2px; }
+  .ev-refs a { color: var(--blue-600); text-decoration: none; }
+  .ev-refs a:hover { text-decoration: underline; }
+
+  /* AI 처방 권고 (inference) */
+  .infer-item {
+    display: flex; gap: 10px; padding: 10px 12px;
+    border-bottom: 1px solid var(--divider); align-items: flex-start;
+  }
+  .infer-item:last-of-type { border-bottom: none; }
+  .infer-item.first { background: var(--green-bg); border-left: 3px solid var(--green); }
+  .infer-item.second { background: var(--blue-50); border-left: 3px solid var(--blue-600); }
+  .infer-rank { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; align-items: center; width: 52px; }
+  .infer-rank .rank {
+    padding: 2px 0; font-size: 10.5px; font-weight: 700; border-radius: 3px;
+    color: #fff; white-space: nowrap; text-align: center; width: 100%;
+  }
+  .infer-item.first  .rank { background: var(--green); }
+  .infer-item.second .rank { background: var(--blue-600); }
+  .infer-item.other  .rank { background: var(--text-muted); }
+  .risk-lv {
+    font-size: 9.5px; font-weight: 700; padding: 1px 4px;
+    border-radius: 3px; text-align: center; width: 100%;
+  }
+  .risk-lv.risk-low      { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+  .risk-lv.risk-moderate { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange); }
+  .risk-lv.risk-high     { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
+  .infer-body { flex: 1; min-width: 0; }
+  .infer-drug { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .infer-drug .en { font-size: 11px; font-weight: 400; color: var(--text-muted); margin-left: 4px; }
+  .infer-drug .strength { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--text-dim); margin-left: 4px; }
+  .infer-drug .freq { font-size: 10.5px; font-weight: 600; color: var(--blue-600); margin-left: 6px; background: var(--blue-50); padding: 1px 6px; border-radius: 3px; }
+  .infer-rationale { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 3px; }
+  .infer-guide { font-size: 10.5px; color: var(--blue-600); font-weight: 600; }
+  .infer-warn  { font-size: 10.5px; color: var(--orange); margin-top: 3px; }
+  .infer-loading { text-align: center; padding: 28px 20px; color: var(--text-muted); font-size: 12.5px; }
+  .infer-loading .spinner { font-size: 28px; display: block; margin-bottom: 8px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .infer-lab { padding: 10px 12px; border-top: 1px solid var(--divider); font-size: 11.5px; color: var(--text-dim); }
+  .overall-risk {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 700; margin-left: 8px;
+  }
+  .overall-risk.low      { background: var(--green-bg); color: var(--green); }
+  .overall-risk.moderate { background: var(--yellow-bg); color: var(--yellow); }
+  .overall-risk.high     { background: var(--orange-bg); color: var(--orange); }
+  .overall-risk.critical { background: var(--red-bg); color: var(--red); }
+
+  /* 복합 처방 세트 카드 */
+  .rx-set-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; background: linear-gradient(135deg, var(--blue-900), var(--blue-700));
+    color: #fff;
+  }
+  .rx-set-header .title { font-size: 13px; font-weight: 800; flex: 1; }
+  .rx-set-risk {
+    padding: 3px 10px; border-radius: 4px; font-size: 10.5px; font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  .rx-set-risk.low      { background: rgba(42,133,87,0.6); }
+  .rx-set-risk.moderate { background: rgba(200,151,18,0.6); }
+  .rx-set-risk.high     { background: rgba(217,123,43,0.6); }
+  .rx-set-risk.critical { background: rgba(196,62,62,0.7); }
+
+  .rx-set-drug {
+    display: grid; grid-template-columns: 32px 1fr auto; gap: 8px;
+    padding: 10px 14px; border-bottom: 1px solid var(--divider); align-items: start;
+  }
+  .rx-set-drug:last-of-type { border-bottom: none; }
+  .rx-set-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--blue-600); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; flex-shrink: 0; margin-top: 1px;
+  }
+  .rx-set-main { min-width: 0; }
+  .rx-set-name { font-size: 13.5px; font-weight: 800; color: var(--text); }
+  .rx-set-name .en  { font-size: 11px; font-weight: 400; color: var(--text-muted); margin-left: 5px; }
+  .rx-set-dose { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--blue-700); font-weight: 600; margin-top: 1px; }
+  .rx-set-rationale { font-size: 11px; color: var(--text-dim); margin-top: 3px; line-height: 1.45; }
+  .rx-set-guide { font-size: 10px; color: var(--blue-600); font-weight: 600; margin-top: 2px; }
+  .rx-set-adj {
+    font-size: 10.5px; color: var(--orange); margin-top: 3px; padding: 2px 6px;
+    background: var(--orange-bg); border-radius: 3px; display: inline-block;
+  }
+  .rx-set-warn { font-size: 10px; color: var(--red); margin-top: 2px; }
+  .rx-set-badge {
+    padding: 3px 8px; border-radius: 3px; font-size: 10px; font-weight: 700;
+    white-space: nowrap; align-self: start; flex-shrink: 0;
+  }
+  .rx-set-badge.low      { background: var(--green-bg);   color: var(--green); border: 1px solid var(--green); }
+  .rx-set-badge.moderate { background: var(--yellow-bg);  color: var(--yellow); border: 1px solid var(--yellow); }
+  .rx-set-badge.high     { background: var(--orange-bg);  color: var(--orange); border: 1px solid var(--orange); }
+  .rx-set-badge.critical { background: var(--red-bg);     color: var(--red);    border: 1px solid var(--red); }
+
+  /* Fast-Track / Skeleton UI */
+  .fast-track {
+    border: 1px dashed var(--blue-600); border-radius: 8px;
+    background: #f0f7ff; padding: 10px 12px; margin-bottom: 10px;
+  }
+  .fast-track .ft-title {
+    font-size: 11px; font-weight: 800; color: var(--blue-700);
+    letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .fast-track .ft-title .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .ft-section { margin-top: 6px; }
+  .ft-section h4 {
+    margin: 0 0 4px; font-size: 10.5px; font-weight: 700; color: var(--text-muted);
+  }
+  .ft-chip {
+    display: inline-block; padding: 3px 8px; margin: 2px 3px 2px 0;
+    border-radius: 4px; font-size: 11px;
+  }
+  .ft-chip.adj   { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+  .ft-chip.cont  { background: var(--red-bg); color: var(--red); border: 1px solid #f3bebb; }
+  .ft-chip.lab   { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
+  .deep-pending {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; background: #fafbff;
+    border-top: 1px solid var(--border-soft);
+    font-size: 12px; color: var(--text-muted);
+  }
+  .deep-pending .spinner-sm {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--blue-200); border-top-color: var(--blue-600);
+    animation: spin 0.8s linear infinite;
+  }
+  .deep-stream {
+    padding: 10px 14px; font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--text-dim); line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+    background: #fafbfc; border-top: 1px solid var(--border-soft);
+    max-height: 160px; overflow-y: auto;
+  }
+  .deep-stream::after {
+    content: "▌"; color: var(--blue-600); animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* 스켈레톤 */
+  .skel {
+    background: linear-gradient(90deg, #eceff3 0%, #f6f8fb 50%, #eceff3 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+    border-radius: 4px;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .skel-line { height: 10px; margin: 6px 0; }
+  .skel-drug { padding: 10px 14px; border-bottom: 1px solid var(--divider); }
+  .skel-drug .skel-line.w80 { width: 80%; }
+  .skel-drug .skel-line.w60 { width: 60%; }
+  .skel-drug .skel-line.w90 { width: 90%; }
+
+  .fade-in { animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* 복약 안내 (효능·주의사항) 레이아웃 */
+  .rx-info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    margin-top: 6px;
+  }
+  @media (max-width: 560px) { .rx-info-grid { grid-template-columns: 1fr; } }
+  .rx-info-box {
+    display: flex; align-items: flex-start; gap: 6px;
+    padding: 6px 8px; border-radius: 5px;
+    border: 1px solid var(--border-soft);
+    background: #fff; font-size: 11px; line-height: 1.45;
+  }
+  .rx-info-box .ico {
+    font-size: 14px; line-height: 1; flex-shrink: 0;
+  }
+  .rx-info-box .lbl {
+    display: block; font-size: 9.5px; font-weight: 800;
+    color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.04em; margin-bottom: 2px;
+  }
+  .rx-info-box .val { color: var(--text); font-weight: 600; }
+  .rx-info-box.efficacy { background: #eef6ff; border-color: #b9dafc; }
+  .rx-info-box.efficacy .val { color: var(--blue-700); }
+  .rx-info-box.intake   { background: #fff8ec; border-color: #f5d9a1; }
+  .rx-info-box.intake   .val { color: #8a5a00; }
+
+  /* 위험도별 inferList 테두리 */
+  #inferList.risk-low      { border: 2px solid var(--green);  border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 3px rgba(34,197,94,0.07); }
+  #inferList.risk-moderate { border: 2px solid #f59e0b; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 3px rgba(245,158,11,0.07); }
+  #inferList.risk-high     { border: 2px solid var(--orange); border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 3px rgba(234,88,12,0.08); }
+  #inferList.risk-critical { border: 2px solid var(--red);    border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 4px rgba(220,38,38,0.10); }
+
+  /* AI 심층 소견 */
+  .deep-insight { padding: 12px 14px; background: #f0f9ff; border-top: 1px solid #bae6fd; }
+  .deep-insight .di-title { font-size: 10.5px; font-weight: 800; color: #0284c7; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+  .deep-insight .di-body  { font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+  .deep-insight.critical  { background: #fff1f2; border-top-color: #fecaca; }
+  .deep-insight.critical .di-title { color: var(--red); }
+  .deep-insight.high      { background: #fff7ed; border-top-color: #fed7aa; }
+  .deep-insight.high .di-title { color: var(--orange); }
+
+  /* 면책 조항 */
+  .disclaimer { padding: 8px 14px; background: #f8fafc; border-top: 1px solid var(--border); font-size: 10px; color: var(--text-muted); line-height: 1.55; }
+
+  /* 근거 해설 패널 */
+  .evidence-panel {
+    margin: 0; padding: 10px 14px;
+    background: var(--blue-50); border-top: 1px solid var(--blue-200);
+  }
+  .evidence-panel .ev-title { font-size: 10.5px; font-weight: 800; color: var(--blue-700); margin-bottom: 5px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .evidence-panel .ev-commentary { font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-bottom: 7px; }
+  .evidence-panel .rct-list { margin: 0; padding: 0; list-style: none; }
+  .evidence-panel .rct-list li { font-size: 10.5px; color: var(--text-muted); padding: 2px 0; }
+  .evidence-panel .rct-list li::before { content: "📄 "; }
+  .evidence-panel .rct-list a { color: var(--blue-600); text-decoration: none; }
+  .evidence-panel .rct-list a:hover { text-decoration: underline; }
+
+  @media (max-width: 640px) {
+    .page { padding: 8px 8px 24px; gap: 8px; }
+    .info-grid { grid-template-columns: 1fr; gap: 8px; }
+    .patient-head { padding: 10px; }
+    .patient-head .name { font-size: 16px; }
+    .drug-row { grid-template-columns: 58px 1fr; padding: 10px; }
+    .rec-opt { padding: 8px; }
+  }
+
+  /* ─────────── Compact 고정 UI (safetyWarnings · prescription · reasons · details) ─────────── */
+  .compact-box { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+
+  .compact-safety { display: flex; flex-direction: column; gap: 5px; }
+  .compact-safety .sw {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 10px; border-radius: 6px; font-size: 13px; line-height: 1.4;
+    border-left: 4px solid transparent;
+  }
+  .compact-safety .sw .sw-lvl {
+    flex-shrink: 0; font-size: 10px; font-weight: 800;
+    padding: 2px 7px; border-radius: 3px; letter-spacing: 0.04em;
+  }
+  .compact-safety .sw .sw-text { font-weight: 600; color: var(--text); }
+  .compact-safety .sw.contraindication { background: var(--red-bg); border-left-color: var(--red); }
+  .compact-safety .sw.contraindication .sw-lvl { background: var(--red); color: #fff; }
+  .compact-safety .sw.contraindication .sw-text { font-weight: 800; color: var(--red); }
+  .compact-safety .sw.dose { background: var(--orange-bg); border-left-color: var(--orange); }
+  .compact-safety .sw.dose .sw-lvl { background: var(--orange); color: #fff; }
+  .compact-safety .sw.dose .sw-text { font-weight: 800; color: var(--orange); }
+  .compact-safety .sw.caution { background: #fef9c3; border-left-color: #ca8a04; }
+  .compact-safety .sw.caution .sw-lvl { background: #ca8a04; color: #fff; }
+
+  .compact-rx {
+    padding: 12px 14px; border-radius: 7px;
+    background: linear-gradient(135deg, #eef2ff, #e0f2fe);
+    border: 1px solid #bae6fd;
+  }
+  .compact-rx .lbl {
+    font-size: 10px; font-weight: 800; color: var(--blue-700);
+    letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px;
+  }
+  .compact-rx .summary {
+    font-size: 15px; font-weight: 800; color: var(--text);
+    font-family: "JetBrains Mono", monospace; line-height: 1.45;
+  }
+
+  .compact-reasons { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .compact-reasons .lbl {
+    font-size: 10px; font-weight: 800; color: var(--text-muted);
+    letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px;
+  }
+  .compact-reasons li {
+    font-size: 13px; color: var(--text); line-height: 1.45;
+    padding: 4px 0 4px 16px; position: relative;
+  }
+  .compact-reasons li::before {
+    content: "•"; position: absolute; left: 4px; top: 4px;
+    color: var(--blue-600); font-weight: 800;
+  }
+
+  details.compact-details {
+    border-top: 1px solid var(--border-soft);
+    padding-top: 8px; margin-top: 4px;
+  }
+  details.compact-details > summary {
+    cursor: pointer; font-size: 11.5px; font-weight: 700;
+    color: var(--blue-700); padding: 4px 0;
+    list-style: none; display: inline-flex; align-items: center; gap: 4px;
+  }
+  details.compact-details > summary::-webkit-details-marker { display: none; }
+  details.compact-details > summary::before {
+    content: "▶"; font-size: 9px; transition: transform 0.15s;
+  }
+  details.compact-details[open] > summary::before { transform: rotate(90deg); }
+  details.compact-details .detail-section { margin-top: 8px; }
+  details.compact-details .detail-section h5 {
+    margin: 0 0 3px; font-size: 10px; font-weight: 800;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  details.compact-details .detail-section .body {
+    font-size: 11.5px; color: var(--text-dim); line-height: 1.55;
+    white-space: pre-wrap;
+  }
+
+  /* ─────────── 표준 출력 템플릿 (core/gdmt/psy/warnings/guidelines) ─────────── */
+  .std-box { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+
+  .std-section { display: flex; flex-direction: column; gap: 6px; }
+  .std-section .lbl {
+    font-size: 10px; font-weight: 800; color: var(--text-muted);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .std-section .lbl .live-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--blue-600);
+    animation: pulse 1s infinite;
+  }
+
+  .std-core {
+    padding: 10px 12px; border-radius: 6px;
+    background: linear-gradient(135deg, #eef2ff, #dbeafe);
+    border-left: 4px solid var(--blue-600);
+    font-size: 14.5px; font-weight: 700; color: var(--text); line-height: 1.4;
+    min-height: 22px;
+  }
+  .std-core.empty { color: var(--text-muted); font-weight: 500; }
+
+  .std-steps { display: flex; flex-direction: column; gap: 5px; }
+  .std-step {
+    display: grid; grid-template-columns: 38px 1fr; gap: 8px;
+    padding: 6px 10px 6px 6px; border-radius: 6px;
+    background: #fff; border: 1px solid var(--border-soft);
+  }
+  .std-step .num {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--blue-600); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+  }
+  .std-step .body { min-width: 0; }
+  .std-step .drug {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .std-step .note { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+
+  .std-psy {
+    padding: 10px 12px; border-radius: 6px;
+    background: #f5f3ff; border-left: 4px solid #7c3aed;
+  }
+  .std-psy .lbl-psy {
+    font-size: 10.5px; font-weight: 800; color: #6d28d9;
+    letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px;
+  }
+  .std-psy .drug { font-size: 13px; font-weight: 700; color: var(--text); }
+  .std-psy .consult { font-size: 11.5px; color: #5b21b6; margin-top: 3px; }
+
+  .std-warnings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .std-warnings li {
+    font-size: 12.5px; padding: 5px 9px; border-radius: 5px;
+    background: var(--orange-bg); color: #7c2d12; border-left: 3px solid var(--orange);
+    line-height: 1.4;
+  }
+
+  .std-guidelines { display: flex; flex-wrap: wrap; gap: 4px; }
+  .std-guidelines .gd-chip {
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px;
+    background: var(--blue-50); color: var(--blue-700);
+    border: 1px solid var(--blue-200);
+  }
+
+  .std-streaming {
+    font-size: 10.5px; color: var(--text-muted); padding: 2px 6px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .std-streaming::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--blue-600); animation: pulse 1s infinite;
+  }
+
+  /* ─────────── 1·2차 처방 추천 (recommendation-section) ─────────── */
+  .rec-set { padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; }
+  .rec-set-block { display: flex; flex-direction: column; gap: 6px; }
+  .rec-set-block .rs-title {
+    font-size: 11.5px; font-weight: 800; color: var(--text);
+    display: flex; align-items: center; gap: 8px; margin-bottom: 2px;
+  }
+  .rec-set-block .rs-title .rank {
+    padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 800;
+    color: #fff; letter-spacing: 0.04em;
+  }
+  .rec-set-block.primary   .rs-title .rank { background: var(--green); }
+  .rec-set-block.secondary .rs-title .rank { background: var(--blue-600); }
+  .rec-set-block .rs-sub { font-size: 11px; color: var(--text-muted); }
+
+  .rx-table {
+    border: 1px solid var(--border); border-radius: 7px; overflow: hidden;
+    background: #fff;
+  }
+  .rx-row {
+    display: grid; grid-template-columns: 60px 1fr 90px 90px;
+    gap: 8px; padding: 8px 10px; align-items: center;
+    border-bottom: 1px solid var(--divider); font-size: 12.5px;
+  }
+  .rx-row:last-child { border-bottom: none; }
+  .rx-row.head {
+    background: var(--surface-2); font-size: 10px; font-weight: 800;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .rx-row .cat-badge {
+    padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;
+    text-align: center; white-space: nowrap;
+  }
+  .rx-row .cat-badge.주치료   { background: var(--green-bg);   color: var(--green); border: 1px solid var(--green); }
+  .rx-row .cat-badge.방어제   { background: var(--blue-50);    color: var(--blue-700); border: 1px solid var(--blue-200); }
+  .rx-row .cat-badge.정신과   { background: #f5f3ff;            color: #6d28d9; border: 1px solid #ddd6fe; }
+  .rx-row .name-col .name {
+    font-size: 13px; font-weight: 800; color: var(--text); font-family: "JetBrains Mono", monospace;
+  }
+  .rx-row .name-col .form {
+    font-size: 10.5px; color: var(--text-muted); margin-top: 1px;
+    font-style: italic;
+  }
+  .rx-row .name-col .form::before { content: "💊 "; }
+  .rx-row .dose, .rx-row .freq {
+    font-family: "JetBrains Mono", monospace; font-size: 11.5px;
+    color: var(--blue-700); font-weight: 700; text-align: center;
+  }
+  .rx-row .pick {
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rx-row .pick input { width: 16px; height: 16px; cursor: pointer; }
+
+  .rx-row .row-note {
+    grid-column: 2 / -1; font-size: 11px; color: var(--text-dim);
+    line-height: 1.4; margin-top: 2px;
+  }
+
+  .rec-confirm-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: var(--surface-2);
+    border-top: 1px solid var(--border); border-radius: 0 0 7px 7px;
+  }
+  .rec-confirm-bar .summary {
+    font-size: 11.5px; color: var(--text-muted);
+  }
+  .rec-confirm-bar .summary b { color: var(--text); }
+  .btn-confirm-rx {
+    padding: 8px 18px; font-size: 12.5px; font-weight: 800;
+    background: linear-gradient(135deg, var(--green), #16a34a);
+    color: #fff; border: none; border-radius: 5px; cursor: pointer;
+    transition: transform 0.08s, box-shadow 0.15s;
+    box-shadow: 0 2px 6px rgba(34,197,94,0.25);
+  }
+  .btn-confirm-rx:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(34,197,94,0.35); }
+  .btn-confirm-rx:active { transform: translateY(0); }
+  .btn-confirm-rx.sent { background: var(--text-muted); cursor: default; }
+  .btn-confirm-rx.sent::before { content: "✓ "; }
+
+  @media (max-width: 640px) {
+    .rx-row { grid-template-columns: 50px 1fr 80px; }
+    .rx-row .freq { display: none; }
+  }
+
+  /* ─────────── Risperidone 심혈관 위험 알림 ─────────── */
+  .risp-banner {
+    margin: 0 14px 8px; padding: 10px 12px;
+    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    border: 1px solid var(--orange);
+    border-left: 5px solid var(--orange);
+    border-radius: 6px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .risp-banner .rb-title {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 800; color: #9a3412;
+    letter-spacing: 0.04em;
+  }
+  .risp-banner .rb-title .rb-pill {
+    padding: 2px 8px; background: var(--orange); color: #fff;
+    border-radius: 3px; font-size: 10.5px; font-weight: 800;
+  }
+  .risp-banner .rb-msg {
+    font-size: 12.5px; color: #7c2d12; line-height: 1.45;
+  }
+
+  .risp-alt-card {
+    margin: 0 14px 8px; padding: 10px 12px;
+    background: #f0f9ff; border: 1px dashed var(--blue-600);
+    border-radius: 6px;
+  }
+  .risp-alt-card .alt-title {
+    font-size: 11.5px; font-weight: 800; color: var(--blue-700); margin-bottom: 5px;
+  }
+  .risp-alt-card .alt-title::before { content: "💡 "; }
+  .risp-alt-card .alt-list {
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .risp-alt-card .alt-item {
+    display: flex; gap: 8px; padding: 6px 8px;
+    background: #fff; border: 1px solid var(--blue-200); border-radius: 5px;
+    font-size: 12px;
+  }
+  .risp-alt-card .alt-item .nm {
+    font-weight: 800; color: var(--text); font-family: "JetBrains Mono", monospace;
+  }
+  .risp-alt-card .alt-item .dose {
+    color: var(--blue-700); font-family: "JetBrains Mono", monospace;
+  }
+  .risp-alt-card .alt-item .reason {
+    color: var(--text-dim); font-size: 11px;
+  }
+
+  /* 처방 리스트 내 Risperidone 행 — 빨간 텍스트 + 느낌표 */
+  .rx-row.risk-risp .name-col .name { color: var(--red); }
+  .rx-row.risk-risp .name-col .name::before {
+    content: "⚠️ "; font-size: 13px;
+  }
+  .rx-row.risk-risp { background: #fff5f5; }
+
+  /* 모니터링 필수 footer */
+  .risp-monitor {
+    margin: 8px 14px 0; padding: 10px 12px;
+    background: #fef2f2; border: 1px solid #fecaca;
+    border-left: 5px solid var(--red); border-radius: 6px;
+  }
+  .risp-monitor .mon-title {
+    font-size: 11.5px; font-weight: 800; color: var(--red);
+    letter-spacing: 0.04em; margin-bottom: 5px;
+  }
+  .risp-monitor ul { margin: 0; padding-left: 16px; }
+  .risp-monitor li {
+    font-size: 12px; color: #7f1d1d; line-height: 1.45; padding: 1px 0;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="logo">Rx+</div>
+  <div>
+    <h1>의사 모니터</h1>
+    <div class="sub">실시간 처방 분석 · 1·2 추천</div>
+  </div>
+  <div class="spacer"></div>
+  <a class="link" href="index.html">홈</a>
+</header>
+
+<div class="page" id="page">
+  <div class="queue-bar" id="queueBar"></div>
+  <div id="mainView"></div>
+</div>
+
+<script src="shared.js?v=20260425-risp"></script>
+<script>
+  let activeId = null;
+  let currentNote = "";
+  let inferenceResult  = null;
+  let inferenceLoading = false;
+  let inferenceError   = null;
+  let detailsOpen      = false;
+  let fastTrack        = null;
+  let deepStreamText   = "";
+  let partialResult    = null;      // 스트리밍 중 progressive 파싱 결과
+  let deadlineElapsed  = false;
+  let streamAbort      = null;
+
+  /**
+   * 부분 JSON 파서 — 스트리밍 중 미완성 텍스트에서 표준 6필드를 추출.
+   * 첫 토큰이 도착하자마자 core 등을 화면에 표시하기 위함.
+   */
+  function extractPartial(text) {
+    const m = text.match(/\{[\s\S]*/);
+    if (!m) return null;
+    const buf = m[0];
+    const out = {};
+
+    // core: "..."
+    const coreMatch = buf.match(/"core"\s*:\s*"((?:\\.|[^"\\])*)"/);
+    if (coreMatch) out.core = coreMatch[1].replace(/\\"/g, '"').replace(/\\n/g, " ");
+
+    // recommendation_set.primary: [ {generic_name_ko, strength, frequency, form_description, category, note} ]
+    const primaryMatch = buf.match(/"primary"\s*:\s*\[([\s\S]*?)(?:\](?=\s*[,}])|$)/);
+    if (primaryMatch) {
+      out.recommendation_set = out.recommendation_set || { primary: [], secondary: [] };
+      const objRe = /\{[^{}]*\}/g;
+      let mo;
+      while ((mo = objRe.exec(primaryMatch[1]))) {
+        try {
+          const parsed = JSON.parse(mo[0]);
+          if (parsed.generic_name_ko) out.recommendation_set.primary.push(parsed);
+        } catch {}
+      }
+    }
+    const secondaryMatch = buf.match(/"secondary"\s*:\s*\[([\s\S]*?)(?:\](?=\s*[,}])|$)/);
+    if (secondaryMatch) {
+      out.recommendation_set = out.recommendation_set || { primary: [], secondary: [] };
+      const objRe = /\{[^{}]*\}/g;
+      let mo;
+      while ((mo = objRe.exec(secondaryMatch[1]))) {
+        try {
+          const parsed = JSON.parse(mo[0]);
+          if (parsed.generic_name_ko) out.recommendation_set.secondary.push(parsed);
+        } catch {}
+      }
+    }
+
+    // gdmt_steps: [ {step,drug,note}, ... ]
+    const stepsMatch = buf.match(/"gdmt_steps"\s*:\s*\[([\s\S]*?)(?:\]|$)/);
+    if (stepsMatch) {
+      out.gdmt_steps = [];
+      const objRe = /\{[^{}]*\}/g;
+      let mo;
+      while ((mo = objRe.exec(stepsMatch[1]))) {
+        try {
+          const parsed = JSON.parse(mo[0]);
+          if (parsed.drug) out.gdmt_steps.push(parsed);
+        } catch {}
+      }
+    }
+
+    // psychiatric: { detected, drug, consult }
+    const psyMatch = buf.match(/"psychiatric"\s*:\s*(\{[^{}]*\})/);
+    if (psyMatch) {
+      try { out.psychiatric = JSON.parse(psyMatch[1]); } catch {}
+    }
+
+    // warnings: [ "...", "..." ]
+    const wMatch = buf.match(/"warnings"\s*:\s*\[([\s\S]*?)(?:\]|$)/);
+    if (wMatch) {
+      out.warnings = [];
+      const strRe = /"((?:\\.|[^"\\])*)"/g;
+      let ms;
+      while ((ms = strRe.exec(wMatch[1]))) out.warnings.push(ms[1]);
+    }
+
+    // guidelines: [ "...", "..." ]
+    const gMatch = buf.match(/"guidelines"\s*:\s*\[([\s\S]*?)(?:\]|$)/);
+    if (gMatch) {
+      out.guidelines = [];
+      const strRe = /"((?:\\.|[^"\\])*)"/g;
+      let ms;
+      while ((ms = strRe.exec(gMatch[1]))) out.guidelines.push(ms[1]);
+    }
+
+    return out;
+  }
+
+  function renderQueueBar(queue) {
+    const bar = document.getElementById("queueBar");
+    if (!queue.length) {
+      bar.innerHTML = `<span style="font-size:12px; color:var(--text-muted); padding: 4px 6px;">대기 중인 환자가 없습니다. 접수 스테이션에서 입력하세요.</span>`;
+      return;
+    }
+    bar.innerHTML = "";
+    queue.forEach((p, i) => {
+      const pill = document.createElement("div");
+      pill.className = "queue-pill" + (p.id === activeId ? " active" : "");
+      pill.innerHTML = `<span class="n">${i+1}</span> ${p.name} <span style="opacity:0.7;">${p.age}세</span>`;
+      pill.addEventListener("click", () => {
+        activeId = p.id;
+        currentNote = p.note || "";
+        inferenceResult = null; inferenceLoading = false; inferenceError = null;
+        partialResult = null; deepStreamText = ""; fastTrack = null;
+        render();
+      });
+      bar.appendChild(pill);
+    });
+  }
+
+  function severityLabel(s) { return { critical:"금기", high:"고위험", warn:"주의", ok:"정상" }[s] || s; }
+
+  async function fetchInference(patient, noteText) {
+    if (!patient._dbId) { inferenceError = "환자 DB ID 없음"; renderInference(); return; }
+    if (inferenceLoading) {
+      if (streamAbort) streamAbort.abort();
+    }
+    inferenceLoading = true; inferenceResult = null; inferenceError = null;
+    fastTrack = null; deepStreamText = ""; partialResult = null; deadlineElapsed = false;
+    renderInference();
+
+    // 3초 데드라인 — 경과하면 '상세 분석 중…' 상태 메시지로 전환
+    const deadlineTimer = setTimeout(() => {
+      if (inferenceLoading && !inferenceResult) {
+        deadlineElapsed = true;
+        renderInference();
+      }
+    }, 3000);
+
+    streamAbort = new AbortController();
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch("/api/v1/inference/analyze/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patient_id: patient._dbId, visit_date: today, physician_note: noteText }),
+        signal: streamAbort.signal,
+      });
+      if (!res.ok || !res.body) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`${res.status}: ${txt.slice(0, 200)}`);
+      }
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let currentEvent = "message";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE 프레임 분리 (빈 줄이 구분자)
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const lines = frame.split("\n");
+          let evt = "message", data = "";
+          for (const ln of lines) {
+            if (ln.startsWith("event:")) evt = ln.slice(6).trim();
+            else if (ln.startsWith("data:")) data += ln.slice(5).trimStart();
+          }
+          handleSSE(evt, data);
+        }
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") inferenceError = e.message;
+    } finally {
+      clearTimeout(deadlineTimer);
+      inferenceLoading = false;
+      renderInference();
+      renderAnalysis();
+    }
+  }
+
+  function handleSSE(evt, data) {
+    try {
+      if (evt === "fast") {
+        fastTrack = JSON.parse(data);
+        renderInference();
+      } else if (evt === "chunk") {
+        deepStreamText += JSON.parse(data);
+        // progressive 파싱 — 첫 토큰부터 화면 갱신
+        partialResult = extractPartial(deepStreamText);
+        renderInference();
+      } else if (evt === "result") {
+        inferenceResult = JSON.parse(data);
+        partialResult = null;
+        renderInference();
+      } else if (evt === "error") {
+        inferenceError = JSON.parse(data);
+        renderInference();
+      }
+    } catch (e) {
+      console.warn("SSE parse error:", e, evt, data);
+    }
+  }
+
+  function renderInference() {
+    const el = document.getElementById("inferList");
+    if (!el) return;
+
+    if (inferenceError && !inferenceResult) {
+      el.innerHTML = `<div class="empty" style="color:var(--red); padding:14px 12px;">오류: ${inferenceError}</div>`;
+      return;
+    }
+
+    // 데이터 우선순위: 최종 result > 스트리밍 partial > FastTrack만
+    const r = inferenceResult || partialResult || {};
+    const streaming = inferenceLoading && !inferenceResult;
+    const empty = !inferenceLoading && !inferenceResult && !partialResult;
+
+    if (empty) {
+      el.innerHTML = `<div class="empty">진단 내용을 입력하고 <b>저장</b>하면 AI 처방 제안이 생성됩니다.</div>`;
+      return;
+    }
+
+    el.className = `risk-${r.overall_risk || "moderate"} fade-in`;
+
+    // FastTrack 즉시 결과 (eGFR step + 정신과 경고)
+    let html = fastTrack ? renderFastTrackCompact(fastTrack) : "";
+    html += `<div class="std-box">`;
+
+    // ── [핵심 요약] ──
+    const core = r.core || "";
+    html += `<div class="std-section">
+      <div class="lbl">${streaming ? '<span class="live-dot"></span>' : ""}🎯 핵심 요약</div>
+      <div class="std-core ${core ? "" : "empty"}">${core ? escapeHtml(core) : (streaming ? "분석 중…" : "—")}</div>
+    </div>`;
+
+    // ── [GDMT 단계] ──
+    const steps = r.gdmt_steps || [];
+    if (steps.length || streaming) {
+      html += `<div class="std-section">
+        <div class="lbl">${streaming && steps.length < 4 ? '<span class="live-dot"></span>' : ""}📋 GDMT 단계</div>`;
+      if (steps.length) {
+        html += `<div class="std-steps">`;
+        html += steps.slice(0, 4).map(s => `
+          <div class="std-step">
+            <div class="num">${s.step || "·"}</div>
+            <div class="body">
+              <div class="drug">${escapeHtml(s.drug || "")}</div>
+              ${s.note ? `<div class="note">${escapeHtml(s.note)}</div>` : ""}
+            </div>
+          </div>`).join("");
+        html += `</div>`;
+      } else if (streaming) {
+        html += `<div class="std-streaming">단계 생성 중</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // ── [정신과 단계] (조건부) ──
+    const psy = r.psychiatric;
+    if (psy && psy.detected) {
+      html += `<div class="std-psy">
+        <div class="lbl-psy">🧠 정신과 단계</div>
+        ${psy.drug ? `<div class="drug">${escapeHtml(psy.drug)}</div>` : ""}
+        ${psy.consult ? `<div class="consult">${escapeHtml(psy.consult)}</div>` : ""}
+      </div>`;
+    }
+
+    // ── [주의사항] ──
+    const warns = r.warnings || [];
+    if (warns.length) {
+      html += `<div class="std-section">
+        <div class="lbl">⚠️ 주의사항</div>
+        <ul class="std-warnings">
+          ${warns.slice(0, 3).map(w => `<li>${escapeHtml(w)}</li>`).join("")}
+        </ul>
+      </div>`;
+    }
+
+    // ── [근거] ──
+    const guides = r.guidelines || [];
+    if (guides.length) {
+      html += `<div class="std-section">
+        <div class="lbl">📚 근거</div>
+        <div class="std-guidelines">
+          ${guides.slice(0, 5).map(g => `<span class="gd-chip">${escapeHtml(g)}</span>`).join("")}
+        </div>
+      </div>`;
+    }
+
+    // ── [상세 보기] (최종 result에서만 노출) ──
+    const details = inferenceResult?.details;
+    const hasDetails = details && (details.guidelines || details.rct || details.notes);
+    if (hasDetails) {
+      html += `<details class="compact-details" id="compactDetails"${detailsOpen ? " open" : ""}>
+        <summary>상세 보기</summary>
+        ${details.guidelines ? `<div class="detail-section"><h5>📋 가이드라인</h5><div class="body">${escapeHtml(details.guidelines)}</div></div>` : ""}
+        ${details.rct ? `<div class="detail-section"><h5>🧪 RCT · 논문</h5><div class="body">${escapeHtml(details.rct)}</div></div>` : ""}
+        ${details.notes ? `<div class="detail-section"><h5>📝 추가 설명</h5><div class="body">${escapeHtml(details.notes)}</div></div>` : ""}
+      </details>`;
+    }
+
+    html += `</div>`;
+    el.innerHTML = html;
+
+    const det = document.getElementById("compactDetails");
+    if (det) det.addEventListener("toggle", () => { detailsOpen = det.open; });
+
+    // 스트리밍 중에도 1·2차 추천 영역 동시 갱신 (1초 내 노출)
+    if (typeof renderRecommendationSet === "function" && document.getElementById("recList")) {
+      renderRecommendationSet();
+    }
+  }
+
+  function renderFastTrackCompact(ft) {
+    const adjs   = ft.dose_adjustments || [];
+    const cont   = ft.contraindicated || [];
+    const labs   = ft.lab_flags || [];
+    const psy    = ft.psychiatric_warnings || [];
+    const steps  = ft.egfr_steps || [];
+    if (!adjs.length && !cont.length && !labs.length && !psy.length && !steps.length) return "";
+
+    const chip = (txt, cls) => `<span class="ft-chip ${cls}">${escapeHtml(txt)}</span>`;
+    return `
+      <div class="fast-track fade-in">
+        <div class="ft-title"><span class="dot"></span>⚡ 즉시 분석 (0.3초 — eGFR/정신과/금기)</div>
+        ${steps.length ? `<div class="ft-section"><h4>💊 eGFR 기반 용량</h4>${steps.map(s => chip(s, "adj")).join("")}</div>` : ""}
+        ${psy.length ? `<div class="ft-section"><h4>🧠 정신과 트랙</h4>${psy.map(p => chip(p, "lab")).join("")}</div>` : ""}
+        ${cont.length ? `<div class="ft-section"><h4>🚫 즉시 금기</h4>${cont.map(c => chip(c, "cont")).join("")}</div>` : ""}
+        ${adjs.length ? `<div class="ft-section"><h4>⚙ 용량 조절</h4>${adjs.map(a => chip(a, "adj")).join("")}</div>` : ""}
+        ${labs.length ? `<div class="ft-section"><h4>🧪 Lab 경고</h4>${labs.map(l => chip(l, "lab")).join("")}</div>` : ""}
+      </div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => (
+      { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]
+    ));
+  }
+
+  function renderFastTrack(ft) {
+    const defense = ft.defense_drugs || [];
+    const adjs    = ft.dose_adjustments || [];
+    const cont    = ft.contraindicated || [];
+    const labs    = ft.lab_flags || [];
+
+    if (!defense.length && !adjs.length && !cont.length && !labs.length) {
+      return `<div class="fast-track fade-in">
+        <div class="ft-title"><span class="dot"></span>⚡ 즉시 분석 — 즉시 조치 필요 사항 없음</div>
+      </div>`;
+    }
+
+    const defHtml = defense.map((g, i) => `
+      <div class="rx-set-drug">
+        <div class="rx-set-num" style="background: var(--green);">+${i + 1}</div>
+        <div class="rx-set-main">
+          <div class="rx-set-name">${g.generic_name_ko}<span class="en">${g.generic_name_en}</span></div>
+          <div class="rx-set-dose">${g.strength_mg != null ? g.strength_mg + "mg " : ""}${g.frequency}</div>
+          <div class="rx-info-grid">
+            ${g.drug_category ? `<div class="rx-info-box efficacy"><span class="ico">💊</span><div><span class="lbl">효능</span><span class="val">${g.drug_category}</span></div></div>` : ""}
+            ${g.intake_instruction ? `<div class="rx-info-box intake"><span class="ico">🍽️</span><div><span class="lbl">복약 안내</span><span class="val">${g.intake_instruction}</span></div></div>` : ""}
+          </div>
+          <div class="rx-set-rationale">${g.rationale}</div>
+        </div>
+        <span class="rx-set-badge low">방어약</span>
+      </div>`).join("");
+
+    return `
+      <div class="fast-track fade-in">
+        <div class="ft-title"><span class="dot"></span>⚡ 즉시 분석 (0.3초 내 · 정규식/사전 기반)</div>
+        ${defense.length ? `<div class="ft-section"><h4>🛡 방어 처방 (Safety Set)</h4>${defHtml}</div>` : ""}
+        ${adjs.length ? `<div class="ft-section"><h4>⚙ 용량 조절·시너지</h4>${adjs.map(a => `<span class="ft-chip adj">${escapeHtml(a)}</span>`).join("")}</div>` : ""}
+        ${cont.length ? `<div class="ft-section"><h4>🚫 즉시 금기</h4>${cont.map(c => `<span class="ft-chip cont">${escapeHtml(c)}</span>`).join("")}</div>` : ""}
+        ${labs.length ? `<div class="ft-section"><h4>🧪 Lab 경고</h4>${labs.map(l => `<span class="ft-chip lab">${escapeHtml(l)}</span>`).join("")}</div>` : ""}
+      </div>`;
+  }
+
+  function renderSkeleton() {
+    return `
+      <div class="rx-set-header" style="background: #556579;">
+        <span class="title">🔄 Sonnet 상세 분석 중…</span>
+      </div>
+      ${[1,2,3].map(() => `
+        <div class="skel-drug">
+          <div class="skel skel-line w60"></div>
+          <div class="skel skel-line w80"></div>
+          <div class="skel skel-line w90"></div>
+        </div>`).join("")}`;
+  }
+
+  function evHtml(ev) {
+    if (!ev) return "";
+    const refsHtml = ev.refs && ev.refs.length
+      ? `<ul class="ev-refs">${ev.refs.map(r => {
+          const href = r.url || (r.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/` : null);
+          return href
+            ? `<li>📄 <a href="${href}" target="_blank" rel="noopener noreferrer">${r.label}</a></li>`
+            : `<li>📄 ${r.label}</li>`;
+        }).join("")}</ul>`
+      : "";
+    return `<details class="ev-block"><summary>📚 Clinical Evidence</summary><div class="ev-body"><p class="ev-rationale">${ev.rationale}</p>${refsHtml}</div></details>`;
+  }
+
+  function render() {
+    const queue = RxAssist.loadQueue();
+    renderQueueBar(queue);
+    const main = document.getElementById("mainView");
+
+    let patient = queue.find(p => p.id === activeId);
+    if (!patient && queue.length > 0) {
+      patient = queue[0]; activeId = patient.id;
+      currentNote = patient.note || "";
+      renderQueueBar(queue);
+    }
+
+    if (!patient) {
+      main.innerHTML = `
+        <div class="empty-hero">
+          <div class="icon">🩺</div>
+          <div style="font-size:13.5px; margin-bottom:4px;">환자 정보 대기 중</div>
+          <div style="font-size:11.5px;">접수 스테이션에서 환자 정보를 입력하면 여기에 표시됩니다.</div>
+        </div>`;
+      return;
+    }
+
+    const bases = [...(patient.baseDiseases||[]), ...(patient.customBases||[])];
+    const allergyStr = (patient.allergies||[]).join(", ");
+    const analysis = RxAssist.analyze(patient, patient.prescription || "");
+
+    main.innerHTML = `
+      <div class="patient-head">
+        <span class="name">${patient.name}</span>
+        <span class="meta">${patient.gender} / ${patient.age}세</span>
+        <span class="meta mono">#${patient.chartNo}</span>
+        ${patient.weight ? `<span class="meta">${patient.weight}kg${patient.height ? ' / ' + patient.height + 'cm' : ''}</span>` : ''}
+        ${patient.pregnant ? '<span class="tag red">임신</span>' : ''}
+        ${patient.breastfeeding ? '<span class="tag orange">수유</span>' : ''}
+        ${allergyStr ? `<span class="tag red">⚠ ${allergyStr}</span>` : ''}
+        <div style="flex:1"></div>
+        <div class="sev-summary" id="sevSummary"></div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-block">
+          <h3>기저질환</h3>
+          <div class="content">${bases.length ? bases.map(b=>`<span class="chip" style="margin:2px 3px 2px 0;">${b}</span>`).join("") : '<span style="color:var(--text-muted);">없음</span>'}</div>
+        </div>
+        <div class="info-block">
+          <h3>검사결과</h3>
+          <div class="content" id="labsContent"></div>
+        </div>
+      </div>
+
+      ${patient.history ? `
+      <div class="info-block">
+        <h3>최근 처방 히스토리</h3>
+        <pre class="content mono" style="white-space:pre-wrap; margin:0; font-size: 11.5px;">${patient.history}</pre>
+      </div>` : ''}
+
+      <div class="two-col">
+        <div class="note-panel">
+          <div class="card-head"><span>진단 내용</span><span class="sub">· 증상·진단명·계획 입력</span></div>
+          <textarea id="noteInput" placeholder="예)&#10;주소: 3일 전부터 우측 무릎 통증&#10;진단: 골관절염 (M17.1)&#10;계획: 단기 진통제 + 물리치료 권고">${currentNote}</textarea>
+          <div class="note-footer">
+            <span>다음 방문 시 히스토리로 표시됩니다.</span>
+            <button class="btn-save" id="btnSaveNote">저장</button>
+          </div>
+        </div>
+        <div class="rx-panel">
+          <div class="card-head"><span>최근 처방전</span><span class="sub">· 접수 스테이션 입력 기준</span></div>
+          ${patient.prescription
+            ? `<pre class="rx-content">${patient.prescription}</pre>`
+            : `<div class="rx-empty">접수 스테이션에서<br>처방 정보를 입력하면<br>여기에 표시됩니다.</div>`}
+        </div>
+      </div>
+
+
+      <div class="card">
+        <div class="analysis-head">
+          <span style="font-size:12.5px; font-weight:700;">🤖 AI 처방 권고</span>
+          <span class="sub" style="font-size:11px; color:var(--text-muted);">· 진단 내용 기반 LLM 분석 — 저장 시 자동 실행</span>
+          ${inferenceResult ? `<span class="overall-risk ${inferenceResult.overall_risk}">${{low:"저위험",moderate:"중위험",high:"고위험",critical:"위험"}[inferenceResult.overall_risk]||inferenceResult.overall_risk}</span>` : ""}
+          <button class="btn-reanalyze" id="btnReanalyze" title="현재 메모로 즉시 재분석">🔄 재분석</button>
+        </div>
+        <div id="inferList"></div>
+      </div>
+
+      <div class="card" id="riskSummaryCard" style="display:${analysis.drugs.length ? 'block' : 'none'}">
+        <div class="analysis-head">
+          <span style="font-size:12.5px; font-weight:700;">🚦 처방전 종합 위험도</span>
+          <span class="sub" style="font-size:11px; color:var(--text-muted);">· ${analysis.drugs.length}개 약물 · DDI ${analysis.ddi?.length || 0}건</span>
+        </div>
+        <div id="riskSummary"></div>
+      </div>
+
+      <div class="card">
+        <div class="analysis-head">
+          <span style="font-size:12.5px; font-weight:700;">처방 약물 분석</span>
+          <span class="sub" style="font-size:11px; color:var(--text-muted);">· 개별 약물 금기·경고 체크</span>
+        </div>
+        <div id="drugList"></div>
+      </div>
+
+      <div class="card">
+        <div class="analysis-head">
+          <span style="font-size:12.5px; font-weight:700;">🏥 GDMT 단계별 가이드라인 권고</span>
+          <span class="sub" style="font-size:11px; color:var(--text-muted);">· 분과별 학회 알고리즘 기반 최적 처방 경로</span>
+        </div>
+        <div class="gdmt-legend">
+          <span class="lg-item"><span class="lg-dot p1"></span><b>1단계</b> 핵심 GDMT — 1차 기반 약물 (예: ACEI/ARB)</span>
+          <span class="lg-item"><span class="lg-dot p2"></span><b>2단계</b> 추가 GDMT — 표준 병용 (예: β차단제)</span>
+          <span class="lg-item"><span class="lg-dot p3"></span><b>3단계</b> 보조 — 위험군 강화 (예: MRA)</span>
+          <span class="lg-item"><span class="lg-dot p4"></span><b>4단계</b> 추가 보호 — 장기 합병증 예방 (예: SGLT2i)</span>
+          <span class="lg-item"><span class="lg-dot p5"></span><b>5단계</b> 정신건강 — 본원 정신과 처방 (심독성 낮은 항정신병제 우선)</span>
+        </div>
+        <div id="gdmtList"></div>
+      </div>
+
+      <div class="card">
+        <div class="analysis-head">
+          <span style="font-size:12.5px; font-weight:700;">💡 1·2차 처방 추천</span>
+          <span class="sub" style="font-size:11px; color:var(--text-muted);">· 주치료 + 방어제 + 정신과 통합 세트</span>
+        </div>
+        <div id="recList"></div>
+      </div>
+
+      <div class="disclaimer">
+        ⓘ 본 프로그램은 참고용 보조 도구이며, 최종 처방 판단과 책임은 의사에게 있습니다.
+      </div>
+    `;
+
+    const labs = patient.labs || {};
+    const labItems = [
+      { name: "eGFR", val: labs.eGFR, unit: "mL/min/1.73㎡", flag: labs.eGFR && labs.eGFR < 60 ? "low" : "" },
+      { name: "AST/ALT", val: labs.ASTALT, unit: "U/L" },
+      { name: "K⁺", val: labs.K, unit: "mmol/L", flag: labs.K && (labs.K < 3.5 || labs.K > 5.0) ? "high" : "" },
+      { name: "Na⁺", val: labs.Na, unit: "mmol/L" },
+      { name: "QTc", val: labs.QTc, unit: "ms", flag: labs.QTc && labs.QTc > 450 ? "high" : "" },
+      { name: "BP", val: labs.BP, unit: "mmHg" },
+    ].filter(x => x.val !== null && x.val !== undefined && x.val !== "");
+
+    const labsContent = document.getElementById("labsContent");
+    if (labItems.length === 0 && !patient.labNotes) {
+      labsContent.innerHTML = '<span style="color:var(--text-muted);">검사결과 미입력</span>';
+    } else {
+      labsContent.innerHTML = labItems.map(x =>
+        `<div class="lab-row"><span class="name">${x.name}</span><span class="val ${x.flag||''}">${x.val} <span style="color:var(--text-muted); font-weight:400; font-size:10px;">${x.unit}</span></span></div>`
+      ).join("") + (patient.labNotes ? `<div style="margin-top:6px; padding-top:6px; border-top: 1px dashed var(--border-soft); font-size: 11px;">${patient.labNotes}</div>` : "");
+    }
+
+    /* ── 진단 메모 ─────────────────────────────────────── */
+    const noteInput = document.getElementById("noteInput");
+    const btnSave   = document.getElementById("btnSaveNote");
+
+    async function saveNote() {
+      currentNote = noteInput.value;
+      if (!currentNote.trim()) return;
+      btnSave.textContent = "저장 중…";
+      btnSave.disabled = true;
+      if (patient._dbId) await RxAssist.patchNote(patient._dbId, currentNote);
+      btnSave.textContent = "저장됨 ✓";
+      btnSave.classList.add("saved");
+      setTimeout(() => {
+        btnSave.textContent = "저장";
+        btnSave.classList.remove("saved");
+        btnSave.disabled = false;
+      }, 1500);
+      // 진단 내용 저장 → LLM 처방 권고 자동 실행
+      fetchInference(patient, currentNote);
+    }
+
+    btnSave.addEventListener("click", saveNote);
+
+    // [🔄 재분석] — 메모 재저장 없이 즉시 LLM 재호출
+    const btnRe = document.getElementById("btnReanalyze");
+    if (btnRe) {
+      btnRe.addEventListener("click", () => {
+        if (!patient._dbId) return;
+        const note = (noteInput && noteInput.value.trim()) || currentNote || patient.note || "";
+        if (!note) {
+          alert("진단 메모가 비어 있습니다. 먼저 입력해 주세요.");
+          return;
+        }
+        fetchInference(patient, note);
+      });
+    }
+
+
+    renderAnalysis();
+  }
+
+  function renderRiskSummary(analysis) {
+    const el = document.getElementById("riskSummary");
+    const card = document.getElementById("riskSummaryCard");
+    if (!el) return;
+
+    if (!analysis.drugs.length) { if (card) card.style.display = "none"; return; }
+    if (card) card.style.display = "block";
+
+    const risk = analysis.overallRisk || "ok";
+    const riskLabel = { critical:"⛔ 금기·절대주의", high:"🔴 고위험", warn:"🟡 주의 요망", ok:"✅ 이상 없음" }[risk] || risk;
+    const riskClass = risk;
+
+    // 신호등 dot 클래스
+    const tl = {
+      critical: ["on-red",   "",          ""],
+      high:     ["",          "on-orange", ""],
+      warn:     ["",          "on-yellow", ""],
+      ok:       ["",          "",          "on-green"],
+    }[risk] || ["","",""];
+
+    const { critical=0, high=0, warn=0, ok=0 } = analysis.counts;
+    const countBadges = [
+      critical ? `<span class="rc" style="background:var(--red);">금기 ${critical}</span>` : "",
+      high     ? `<span class="rc" style="background:var(--orange);">고위험 ${high}</span>` : "",
+      warn     ? `<span class="rc" style="background:var(--yellow);">주의 ${warn}</span>` : "",
+      ok       ? `<span class="rc" style="background:var(--green);">정상 ${ok}</span>` : "",
+    ].filter(Boolean).join("");
+
+    const ddiItems = (analysis.ddi || []).map(d => {
+      const sevColor = { critical:"var(--red)", high:"var(--orange)", warn:"var(--yellow)" }[d.sev] || "var(--green)";
+      return `<div class="ddi-item">
+        <span style="color:${sevColor}; font-size:12px; flex-shrink:0;">●</span>
+        <span class="ddi-pair">${d.drugA} ↔ ${d.drugB}</span>
+        <span class="ddi-reason">${d.reason}</span>
+        <span class="ddi-ev">${d.evidence}</span>
+        ${evHtml(d.clinical_evidence)}
+      </div>`;
+    }).join("");
+
+    el.innerHTML = `
+      <div class="risk-summary-card">
+        <div class="traffic-light">
+          <div class="tl-dot ${tl[0]}"></div>
+          <div class="tl-dot ${tl[1]}"></div>
+          <div class="tl-dot ${tl[2]}"></div>
+        </div>
+        <div class="risk-body">
+          <div class="risk-headline">
+            <span class="risk-label ${riskClass}">${riskLabel}</span>
+            <div class="risk-counts">${countBadges}</div>
+          </div>
+          ${ddiItems ? `<div class="ddi-section">
+            <div class="ddi-title">⚡ 복합처방 DDI 상호작용 (${analysis.ddi.length}건)</div>
+            ${ddiItems}
+          </div>` : `<div style="font-size:11.5px; color:var(--text-muted);">처방전 내 약물 간 상호작용 없음</div>`}
+        </div>
+      </div>`;
+  }
+
+  function renderAnalysis() {
+    const queue = RxAssist.loadQueue();
+    const patient = queue.find(p => p.id === activeId);
+    if (!patient) return;
+    const analysis = RxAssist.analyze(patient, patient.prescription || "");
+
+    renderRiskSummary(analysis);
+
+    const sum = document.getElementById("sevSummary");
+    const counts = analysis.counts;
+    const pieces = [];
+    if (counts.critical) pieces.push(`<span class="s" style="background:var(--red);">금기 <b>${counts.critical}</b></span>`);
+    if (counts.high) pieces.push(`<span class="s" style="background:var(--orange);">고위험 <b>${counts.high}</b></span>`);
+    if (counts.warn) pieces.push(`<span class="s" style="background:var(--yellow);">주의 <b>${counts.warn}</b></span>`);
+    if (counts.ok) pieces.push(`<span class="s" style="background:var(--green);">정상 <b>${counts.ok}</b></span>`);
+    sum.innerHTML = pieces.join("");
+
+    const drugList = document.getElementById("drugList");
+    if (analysis.drugs.length === 0) {
+      drugList.innerHTML = `<div class="empty">접수 스테이션에서 처방 정보를 입력하면 분석이 표시됩니다.</div>`;
+    } else {
+      drugList.innerHTML = analysis.drugs.map(x => `
+        <div class="drug-row sev-row-${x.sev === 'ok' ? '' : x.sev}">
+          <div><span class="sev-badge sev-${x.sev} big">${severityLabel(x.sev)}</span></div>
+          <div class="main">
+            <div class="name-line">
+              ${x.drug.name}
+              <span class="spec">${x.drug.strength || ''} ${x.drug.dose || ''}</span>
+            </div>
+            ${x.findings.length ? `<div class="findings">${x.findings.map(f => `
+              <div class="finding">
+                <span style="color:var(--${f.sev==='critical'?'red':f.sev==='high'?'orange':'yellow'}); font-weight:700;">●</span>
+                ${f.reason}
+                <span class="ev">근거 · ${f.evidence}</span>
+                ${evHtml(f.clinical_evidence)}
+              </div>`).join("")}</div>` : `<div class="findings"><div class="finding" style="color:var(--green);">✓ 특이사항 없음</div></div>`}
+          </div>
+        </div>`).join("");
+    }
+
+    const gdmtList = document.getElementById("gdmtList");
+    const localGdmt = analysis.gdmt || [];
+
+    // 정신과 트랙 자동 합성 — fast_track 또는 inferenceResult.psychiatric 감지 시 Step 5 엔트리 추가
+    const psyDetected =
+      (inferenceResult?.psychiatric?.detected) ||
+      (fastTrack?.psychiatric_detected?.length > 0);
+    const merged = [...localGdmt];
+    if (psyDetected) {
+      const psy = inferenceResult?.psychiatric || {};
+      const psyDrug = psy.drug || "Aripiprazole 5mg QD 또는 Quetiapine 25mg HS";
+      const psyConsult = psy.consult ||
+        "심독성 낮은 항정신병제 우선 — 2주 후 재평가, QTc·기립성 저혈압 모니터";
+
+      // 감지된 정신과 증상에 따라 임상 근거 매핑
+      const psyTags = fastTrack?.psychiatric_detected || [];
+      const ev_refs = [
+        { label: "KMAP-CAP 2024 — 우울·조현·조울 약물치료 알고리즘" },
+      ];
+      if (psyTags.includes("psychosis") || psyTags.includes("agitation")) {
+        ev_refs.push({ label: "CATIE — NEJM 2005 (항정신병약 비교)", pmid: "16172203" });
+        ev_refs.push({ label: "Aripiprazole 대사·QT 안전성 — Schizophr Res 2008", pmid: "18255267" });
+      }
+      if (psyTags.includes("depression")) {
+        ev_refs.push({ label: "STAR*D — Am J Psychiatry 2006 (SSRI 단계 치료)", pmid: "17074942" });
+        ev_refs.push({ label: "Sertraline vs Placebo — Lancet 2009", pmid: "19185342" });
+      }
+      if (psyTags.includes("insomnia")) {
+        ev_refs.push({ label: "Trazodone for insomnia — J Clin Sleep Med 2017", pmid: "28992850" });
+      }
+      if (psyTags.includes("anxiety")) {
+        ev_refs.push({ label: "Escitalopram in GAD — JAMA 2003", pmid: "12851276" });
+      }
+
+      const ev_rationale =
+        "심독성·대사 부담 낮은 항정신병제(부분 D2 작용제) 또는 SSRI 우선. " +
+        "QT 연장·기립성 저혈압·체중 증가 위험 최소화. " +
+        "본원 정신과 의사 직접 처방·추적.";
+
+      merged.push({
+        priority: 5,
+        specialty: "정신과",
+        guideline: "KMAP 2024 — 우울·조현병·조울증 가이드라인",
+        action: "본원 처방",
+        drug: psyDrug,
+        reason: psyConsult,
+        clinical_evidence: { rationale: ev_rationale, refs: ev_refs },
+      });
+    }
+
+    // 단계 의미 라벨 — 배지 아래 한 줄
+    const stepMeaning = {
+      1: "핵심 GDMT (1차 기반)",
+      2: "추가 GDMT (표준 병용)",
+      3: "보조 (위험군 강화)",
+      4: "추가 보호 (합병증 예방)",
+      5: "정신건강 (본원 처방)",
+    };
+
+    if (merged.length === 0) {
+      gdmtList.innerHTML = `<div class="empty">이 환자 프로파일에 해당하는 GDMT 권고가 없거나 이미 모두 처방 중입니다.</div>`;
+    } else {
+      gdmtList.innerHTML = merged.map(g => `
+        <div class="gdmt-item">
+          <div class="gdmt-left">
+            <div class="gdmt-p p${g.priority}">${g.priority}단계</div>
+            <div class="gdmt-spec">${g.specialty.split(" ")[0]}</div>
+            <div class="gdmt-meaning">${stepMeaning[g.priority] || ""}</div>
+          </div>
+          <div class="gdmt-body">
+            <div class="gdmt-guide">📋 근거 · ${g.guideline}</div>
+            <div class="gdmt-drug"><span class="action">${g.action}</span>${g.drug}</div>
+            <div class="gdmt-reason">${g.reason}</div>
+            ${evHtml(g.clinical_evidence)}
+          </div>
+        </div>`).join("");
+    }
+
+    renderRecommendationSet();
+    renderInference();
+  }
+
+  /**
+   * [1·2차 처방 추천] — recommendation_set 기반 테이블 렌더 + 처방 확정 버튼.
+   * 스트리밍 중 partialResult.recommendation_set.primary가 채워지면 즉시 표시.
+   */
+  function renderRecommendationSet() {
+    const recList = document.getElementById("recList");
+    if (!recList) return;
+
+    const r = inferenceResult || partialResult || {};
+    const set = r.recommendation_set || { primary: [], secondary: [] };
+    const primary = set.primary || [];
+    const secondary = set.secondary || [];
+    const streaming = inferenceLoading && !inferenceResult;
+
+    if (!primary.length && !secondary.length) {
+      recList.innerHTML = streaming
+        ? `<div class="empty"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--blue-600); animation: pulse 1s infinite; margin-right:6px;"></span>1차 처방 세트 생성 중…</div>`
+        : `<div class="empty">진단 내용을 입력하고 저장하면 1·2차 추천이 표시됩니다.</div>`;
+      return;
+    }
+
+    // Risperidone 감지 — 메모/추천세트/GDMT step 어디든 등장하면 위험 모드
+    const rispDetected = detectRisperidone(primary, secondary);
+
+    const isRispItem = (it) => {
+      const blob = (it.generic_name_ko + " " + (it.generic_name_en || "")).toLowerCase();
+      return /리스페리돈|risperidone|risperdal/i.test(blob);
+    };
+
+    const renderTable = (items, blockClass, rankLabel, sub) => {
+      if (!items.length) return "";
+      const rows = items.map((it) => {
+        const cat = it.category || "주치료";
+        const riskClass = isRispItem(it) ? " risk-risp" : "";
+        return `
+          <div class="rx-row${riskClass}">
+            <div class="cat-badge ${cat}">${cat}</div>
+            <div class="name-col">
+              <div class="name">${escapeHtml(it.generic_name_ko)}</div>
+              ${it.form_description ? `<div class="form">${escapeHtml(it.form_description)}</div>` : ""}
+              ${it.note ? `<div class="row-note">${escapeHtml(it.note)}</div>` : ""}
+            </div>
+            <div class="dose">${escapeHtml(it.strength || "")}</div>
+            <div class="freq">${escapeHtml(it.frequency || "")}</div>
+          </div>`;
+      }).join("");
+      return `
+        <div class="rec-set-block ${blockClass}">
+          <div class="rs-title">
+            <span class="rank">${rankLabel}</span>
+            <span>${escapeHtml(sub)}</span>
+          </div>
+          <div class="rx-table">
+            <div class="rx-row head">
+              <div>구분</div><div>약물 / 제형</div><div>용량</div><div>복용</div>
+            </div>
+            ${rows}
+          </div>
+        </div>`;
+    };
+
+    let html = `<div class="rec-set">`;
+
+    // ── Risperidone 위험 알림 배너 (영역 최상단)
+    if (rispDetected) {
+      const ft = fastTrack?.risperidone_alert || {};
+      const headline = ft.headline ||
+        "리스페리돈은 QTc 연장 및 기립성 저혈압 위험이 있어 심부전 환자에게 신중 투여가 필요합니다.";
+      html += `
+        <div class="risp-banner">
+          <div class="rb-title"><span class="rb-pill">⚠ 심혈관 위험</span> 리스페리돈 감지</div>
+          <div class="rb-msg">⚠️ 주의: ${escapeHtml(headline)}</div>
+        </div>`;
+
+      // 대안 약물 제안 카드
+      const alts = (ft.alternatives && ft.alternatives.length) ? ft.alternatives : [
+        { name: "Aripiprazole", name_ko: "아리피프라졸", dose: "5~10mg QD", reason: "부분 D2 작용제 — QT/대사 부담 최저" },
+        { name: "Quetiapine",   name_ko: "쿠에티아핀",   dose: "25~50mg HS", reason: "낮은 EPS — 진정·수면 동반 시 적합" },
+      ];
+      html += `
+        <div class="risp-alt-card">
+          <div class="alt-title">더 안전한 대안으로 ${alts.map(a => `${a.name_ko}(${a.name})`).join(" 또는 ")}을(를) 고려하시겠습니까?</div>
+          <div class="alt-list">
+            ${alts.map(a => `
+              <div class="alt-item">
+                <span class="nm">${escapeHtml(a.name_ko)}</span>
+                <span style="color:var(--text-muted);">·</span>
+                <span class="dose">${escapeHtml(a.dose)}</span>
+                <span style="color:var(--text-muted);">·</span>
+                <span class="reason">${escapeHtml(a.reason)}</span>
+              </div>`).join("")}
+          </div>
+        </div>`;
+    }
+
+    html += renderTable(primary, "primary", "1차 추천 세트", "주치료 + 방어제 + 정신과 통합");
+    html += renderTable(secondary, "secondary", "2차 대체", "부작용·금기 발생 시 전환");
+
+    // ── Risperidone 처방 강행 시 필수 모니터링 footer
+    if (rispDetected) {
+      const mon = fastTrack?.risperidone_alert?.monitoring || [
+        "처방 전후 심전도(ECG) 검사 시행",
+        "기립성 저혈압 발생 여부 밀착 모니터링",
+      ];
+      html += `
+        <div class="risp-monitor">
+          <div class="mon-title">🚨 리스페리돈 처방 시 필수 모니터링</div>
+          <ul>
+            ${mon.map(m => `<li>필수: ${escapeHtml(m)}</li>`).join("")}
+          </ul>
+        </div>`;
+    }
+
+    html += `</div>`;
+    recList.innerHTML = html;
+  }
+
+  /**
+   * Risperidone 감지 — 메모/FastTrack/추천세트/GDMT step 어디서든 등장하면 true.
+   */
+  function detectRisperidone(primary, secondary) {
+    const re = /리스페리돈|risperidone|risperdal/i;
+
+    if (fastTrack?.risperidone_alert) return true;
+    if ((currentNote || "").match(re)) return true;
+
+    const items = [...(primary || []), ...(secondary || [])];
+    if (items.some(it => re.test((it.generic_name_ko || "") + " " + (it.generic_name_en || "")))) {
+      return true;
+    }
+    const r = inferenceResult || partialResult || {};
+    const steps = r.gdmt_steps || [];
+    if (steps.some(s => re.test(s.drug || ""))) return true;
+    if (re.test(r.psychiatric?.drug || "")) return true;
+
+    return false;
+  }
+
+  // noteInput 포커스 중에는 render() 건너뜀 (innerHTML 교체로 textarea 포커스·커서 증발 방지)
+  RxAssist.subscribe(() => {
+    if (document.activeElement?.id === 'noteInput') return;
+    render();
+  });
+  render();
+</script>
+</body>
+</html>

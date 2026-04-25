@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>접수 스테이션 · 처방 보조</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  .page { max-width: 1100px; margin: 0 auto; padding: 14px 16px 40px; }
+  .layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
+  .queue-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .queue-list { padding: 8px; display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
+  .queue-item {
+    padding: 10px 12px; background: var(--surface-2);
+    border: 1px solid var(--border-soft); border-radius: 6px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .queue-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--blue-600); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px; flex-shrink: 0;
+  }
+  .queue-meta { flex: 1; min-width: 0; }
+  .queue-meta .name { font-weight: 700; font-size: 13.5px; color: var(--text); }
+  .queue-meta .info { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .queue-item .act { display: flex; gap: 4px; flex-shrink: 0; }
+  .queue-item button {
+    background: none; border: none; cursor: pointer; padding: 4px 6px; font-size: 11px;
+    color: var(--text-muted);
+  }
+  .queue-item button:hover { color: var(--red); }
+
+  h2.section { margin: 14px 0 8px; font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .page { padding: 10px 10px 30px; }
+    .queue-list { max-height: 280px; }
+  }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="logo">Rx+</div>
+  <div>
+    <h1>접수 스테이션</h1>
+    <div class="sub">환자 문진 · 기저질환 · 기존 처방 · 검사결과 입력</div>
+  </div>
+  <div class="spacer"></div>
+  <a class="link" href="index.html">← 홈</a>
+  <a class="link" href="의사.html" target="_blank">🩺 의사 모니터 열기</a>
+</header>
+
+<div class="page">
+  <div class="layout">
+    <!-- 입력 폼 -->
+    <div class="card">
+      <div class="card-head">
+        <span>환자 정보 입력</span>
+        <span class="sub" id="queueStatus">· 대기 중 0명</span>
+      </div>
+      <div class="card-body col" style="gap: 14px;">
+        <!-- 기본정보 -->
+        <div>
+          <h2 class="section" style="margin-top:0;">기본 정보</h2>
+          <div class="grid-3" style="gap: 8px;">
+            <label class="field">이름<input class="input" id="f_name" placeholder="김〇〇" /></label>
+            <label class="field">차트번호<input class="input mono" id="f_chart" placeholder="12345678" /></label>
+            <label class="field">성별
+              <select class="input" id="f_gender">
+                <option value="M">남</option><option value="F">여</option>
+              </select>
+            </label>
+            <label class="field">나이<input class="input mono" id="f_age" type="number" placeholder="68" /></label>
+            <label class="field">체중(kg)<input class="input mono" id="f_weight" type="number" placeholder="65" /></label>
+            <label class="field">신장(cm)<input class="input mono" id="f_height" type="number" placeholder="170" /></label>
+          </div>
+          <div style="margin-top:8px; display:flex; gap:14px; font-size:12px;">
+            <label><input type="checkbox" id="f_pregnant" /> 임신</label>
+            <label><input type="checkbox" id="f_breastfeeding" /> 수유</label>
+            <label><input type="checkbox" id="f_smoker" /> 흡연</label>
+            <label><input type="checkbox" id="f_alcohol" /> 음주</label>
+          </div>
+        </div>
+
+        <!-- 15대 기저질환 -->
+        <div>
+          <h2 class="section">기저질환 (15대 · 중복 선택)</h2>
+          <div id="baseList" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+          <div style="display:flex; gap:6px; margin-top:8px;">
+            <input class="input" id="f_customBase" placeholder="기타 질환 입력 …" style="flex:1;" />
+            <button class="btn ghost" id="addCustomBase">추가</button>
+          </div>
+          <div id="customBaseList" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+        </div>
+
+        <!-- 알러지 -->
+        <div>
+          <h2 class="section">알러지 / 부작용 이력</h2>
+          <input class="input" id="f_allergies" placeholder="예: Penicillin (발진), Sulfa (호흡곤란) — 쉼표로 구분" />
+        </div>
+
+        <!-- 최근 처방 -->
+        <div>
+          <h2 class="section">최근 처방 히스토리 (EMR)</h2>
+          <textarea class="input" id="f_history" rows="3" placeholder="예:&#10;2026-01-22 · Ciprofloxacin 500mg 1T bid × 5일&#10;2025-10-18 · NSAID 600mg 1T tid × 5일"></textarea>
+        </div>
+
+        <!-- 검사결과 -->
+        <div>
+          <h2 class="section">검사결과 (있는 경우)</h2>
+          <div class="grid-3" style="gap: 8px;">
+            <label class="field">eGFR (mL/min/1.73㎡)<input class="input mono" id="f_egfr" type="number" placeholder="45" /></label>
+            <label class="field">AST / ALT (U/L)<input class="input mono" id="f_ast" placeholder="28/24" /></label>
+            <label class="field">K⁺ (mmol/L)<input class="input mono" id="f_k" placeholder="4.6" /></label>
+            <label class="field">Na⁺ (mmol/L)<input class="input mono" id="f_na" placeholder="140" /></label>
+            <label class="field">QTc (ms)<input class="input mono" id="f_qtc" placeholder="420" /></label>
+            <label class="field">혈압 (mmHg)<input class="input mono" id="f_bp" placeholder="140/85" /></label>
+          </div>
+          <label class="field" style="margin-top:8px;">기타 검사/소견
+            <textarea class="input" id="f_labNotes" rows="2" placeholder="기타 임상 검사값·소견 메모"></textarea>
+          </label>
+        </div>
+
+        <!-- 제출 -->
+        <div style="display:flex; gap:8px; padding-top: 6px; border-top: 1px dashed var(--border);">
+          <button class="btn primary" id="submitBtn">대기열에 추가</button>
+          <button class="btn ghost" id="resetBtn">초기화</button>
+          <div style="flex:1"></div>
+          <span id="statusMsg" style="font-size:11.5px; color: var(--green); align-self:center;"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 대기열 -->
+    <div class="queue-panel">
+      <div class="card-head">
+        <span>🩺 진료 대기열</span>
+        <span class="sub" id="queueCount">· 0명</span>
+        <div style="flex:1"></div>
+        <button class="btn danger" id="clearAll" style="padding: 3px 10px; font-size: 11px;">전체 삭제</button>
+      </div>
+      <div class="queue-list" id="queueList"></div>
+    </div>
+  </div>
+
+  <div class="disclaimer" style="margin-top: 14px;">
+    ⓘ 입력된 정보는 의사 모니터 화면에서 실시간으로 확인됩니다. 접수 완료 순서대로 대기열에 들어갑니다.
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+  const baseList = document.getElementById("baseList");
+  const selectedBase = new Set();
+  RxAssist.BASE_DISEASES_15.forEach(d => {
+    const chip = document.createElement("span");
+    chip.className = "chip off"; chip.textContent = d;
+    chip.addEventListener("click", () => {
+      if (selectedBase.has(d)) { selectedBase.delete(d); chip.classList.add("off"); }
+      else { selectedBase.add(d); chip.classList.remove("off"); }
+    });
+    baseList.appendChild(chip);
+  });
+
+  const customBaseList = document.getElementById("customBaseList");
+  const customBases = [];
+  function renderCustom() {
+    customBaseList.innerHTML = "";
+    customBases.forEach((v, i) => {
+      const el = document.createElement("span");
+      el.className = "chip custom";
+      el.innerHTML = `${v} <button style="background:none;border:none;color:inherit;cursor:pointer;padding:0;">×</button>`;
+      el.querySelector("button").addEventListener("click", () => { customBases.splice(i, 1); renderCustom(); });
+      customBaseList.appendChild(el);
+    });
+  }
+  document.getElementById("addCustomBase").addEventListener("click", () => {
+    const v = document.getElementById("f_customBase").value.trim();
+    if (v) { customBases.push(v); document.getElementById("f_customBase").value = ""; renderCustom(); }
+  });
+  document.getElementById("f_customBase").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("addCustomBase").click(); }
+  });
+
+  function collectForm() {
+    const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const allergies = (document.getElementById("f_allergies").value || "").split(",").map(s => s.trim()).filter(Boolean);
+    return {
+      id: "p_" + Date.now(),
+      createdAt: Date.now(),
+      name: document.getElementById("f_name").value.trim() || "미입력",
+      chartNo: document.getElementById("f_chart").value.trim() || "-",
+      gender: document.getElementById("f_gender").value,
+      age: parseInt(document.getElementById("f_age").value) || 0,
+      weight: num(document.getElementById("f_weight").value),
+      height: num(document.getElementById("f_height").value),
+      pregnant: document.getElementById("f_pregnant").checked,
+      breastfeeding: document.getElementById("f_breastfeeding").checked,
+      smoker: document.getElementById("f_smoker").checked,
+      alcohol: document.getElementById("f_alcohol").checked,
+      baseDiseases: [...selectedBase],
+      customBases: [...customBases],
+      allergies,
+      history: document.getElementById("f_history").value.trim(),
+      labs: {
+        eGFR: num(document.getElementById("f_egfr").value),
+        ASTALT: document.getElementById("f_ast").value.trim(),
+        K: num(document.getElementById("f_k").value),
+        Na: num(document.getElementById("f_na").value),
+        QTc: num(document.getElementById("f_qtc").value),
+        BP: document.getElementById("f_bp").value.trim(),
+      },
+      labNotes: document.getElementById("f_labNotes").value.trim(),
+      prescription: "",
+    };
+  }
+
+  function resetForm() {
+    ["f_name","f_chart","f_age","f_weight","f_height","f_allergies","f_history",
+     "f_egfr","f_ast","f_k","f_na","f_qtc","f_bp","f_labNotes"].forEach(id => document.getElementById(id).value = "");
+    ["f_pregnant","f_breastfeeding","f_smoker","f_alcohol"].forEach(id => document.getElementById(id).checked = false);
+    selectedBase.clear();
+    customBases.length = 0;
+    baseList.querySelectorAll(".chip").forEach(c => c.classList.add("off"));
+    renderCustom();
+  }
+
+  function showStatus(msg, color) {
+    const el = document.getElementById("statusMsg");
+    el.textContent = msg; el.style.color = color || "var(--green)";
+    setTimeout(() => { el.textContent = ""; }, 2500);
+  }
+
+  document.getElementById("submitBtn").addEventListener("click", () => {
+    const patient = collectForm();
+    if (patient.name === "미입력" || !patient.age) {
+      showStatus("이름과 나이는 필수입니다.", "var(--red)"); return;
+    }
+    const queue = RxAssist.loadQueue();
+    queue.push(patient);
+    RxAssist.saveQueue(queue);
+    renderQueue();
+    resetForm();
+    showStatus(`✓ ${patient.name} 대기열 추가 완료`);
+  });
+  document.getElementById("resetBtn").addEventListener("click", resetForm);
+
+  function renderQueue() {
+    const queue = RxAssist.loadQueue();
+    const list = document.getElementById("queueList");
+    const count = document.getElementById("queueCount");
+    const status = document.getElementById("queueStatus");
+    count.textContent = `· ${queue.length}명`;
+    status.textContent = `· 대기 중 ${queue.length}명`;
+    if (queue.length === 0) {
+      list.innerHTML = `<div class="empty">대기 중인 환자가 없습니다.</div>`; return;
+    }
+    list.innerHTML = "";
+    queue.forEach((p, i) => {
+      const el = document.createElement("div");
+      el.className = "queue-item";
+      const bases = [...(p.baseDiseases||[]), ...(p.customBases||[])].join(", ") || "기저질환 없음";
+      el.innerHTML = `
+        <div class="queue-num">${i + 1}</div>
+        <div class="queue-meta">
+          <div class="name">${p.name} <span style="font-weight:400;color:var(--text-muted);font-size:11px;">${p.gender} / ${p.age}세 · #${p.chartNo}</span></div>
+          <div class="info">${bases}${p.allergies && p.allergies.length ? " · ⚠ " + p.allergies.join(", ") : ""}</div>
+        </div>
+        <div class="act"><button title="삭제">×</button></div>`;
+      el.querySelector("button").addEventListener("click", () => {
+        const q = RxAssist.loadQueue();
+        q.splice(i, 1);
+        RxAssist.saveQueue(q); renderQueue();
+      });
+      list.appendChild(el);
+    });
+  }
+
+  document.getElementById("clearAll").addEventListener("click", () => {
+    if (confirm("대기열 전체를 삭제할까요?")) { RxAssist.saveQueue([]); renderQueue(); }
+  });
+
+  RxAssist.subscribe(renderQueue);
+  renderQueue();
+</script>
+</body>
+</html>

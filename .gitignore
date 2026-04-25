@@ -7,3 +7,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Local tooling / runtime artifacts
+.claude/
+*.log
+uvicorn.log

@@ -1,0 +1,170 @@
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #d9dfe7;
+  --border-soft: #e5eaf0;
+  --divider: #eef1f5;
+  --text: #1a2332;
+  --text-dim: #3b4656;
+  --text-muted: #6b7684;
+
+  --blue-50: #e8f1fa;
+  --blue-200: #b8d3ed;
+  --blue-600: #1a6fb3;
+  --blue-700: #155a93;
+  --blue-900: #0e3d66;
+
+  --red: #c43e3e;
+  --red-bg: #fdecec;
+  --orange: #d97b2b;
+  --orange-bg: #fdf0e1;
+  --yellow: #c89712;
+  --yellow-bg: #fcf5dc;
+  --green: #2a8557;
+  --green-bg: #e6f4ec;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 13px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+/* iOS 입력 줌 방지 — 16px 이상 */
+@media (max-width: 640px) {
+  .input, select.input, textarea.input { font-size: 16px !important; }
+  body { font-size: 14px; }
+  .appbar { padding: 10px 12px; gap: 8px; }
+  .appbar h1 { font-size: 14px; }
+  .appbar .sub { display: none; }
+}
+.mono { font-family: "JetBrains Mono", "SF Mono", Menlo, monospace; }
+
+/* ===== App bar ===== */
+.appbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+.appbar .logo {
+  width: 32px; height: 32px; border-radius: 6px;
+  background: linear-gradient(135deg, var(--blue-600), var(--blue-900));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 13px;
+}
+.appbar h1 { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+.appbar .sub { font-size: 11px; color: var(--text-muted); }
+.appbar .spacer { flex: 1; }
+.appbar .link {
+  font-size: 12px; color: var(--blue-700); text-decoration: none;
+  padding: 6px 10px; border-radius: 5px;
+}
+.appbar .link:hover { background: var(--blue-50); }
+
+/* ===== Card ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.card-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 700; color: var(--text);
+  min-width: 0;
+}
+.card-head > span:first-child { white-space: nowrap; flex-shrink: 0; }
+.card-head .sub {
+  font-weight: 400; color: var(--text-muted); font-size: 11px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card-body { padding: 12px; }
+.col { display: flex; flex-direction: column; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 600px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+
+/* ===== Form ===== */
+.field {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 11px; color: var(--text-muted); font-weight: 600;
+}
+.input, select.input, textarea.input {
+  width: 100%;
+  font: inherit; font-size: 12.5px; color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 7px 9px;
+}
+.input:focus, textarea.input:focus, select.input:focus {
+  outline: none; border-color: var(--blue-600);
+  box-shadow: 0 0 0 2px rgba(26, 111, 179, 0.15);
+}
+textarea.input { resize: vertical; font-family: inherit; }
+
+/* ===== Buttons ===== */
+.btn {
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 7px 14px; border-radius: 5px;
+  border: 1px solid var(--border);
+  background: #fff; color: var(--text);
+  cursor: pointer;
+}
+.btn:hover { background: var(--surface-2); }
+.btn.primary {
+  background: var(--blue-600); color: #fff; border-color: var(--blue-600);
+}
+.btn.primary:hover { background: var(--blue-700); }
+.btn.ghost { background: transparent; }
+.btn.danger {
+  background: #fff; color: var(--red); border-color: #f0bebe;
+}
+.btn.danger:hover { background: var(--red-bg); }
+
+/* ===== Chips ===== */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 14px;
+  font-size: 11.5px; font-weight: 600;
+  background: var(--blue-50); color: var(--blue-700);
+  border: 1px solid var(--blue-200);
+  cursor: pointer; user-select: none;
+}
+.chip.off { background: #fff; color: var(--text-muted); border-color: var(--border); font-weight: 500; }
+.chip.custom { background: #fef3e8; color: var(--orange); border-color: #f3c898; }
+
+/* ===== Severity badges ===== */
+.sev-badge {
+  display: inline-block; padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 10.5px; font-weight: 700;
+  color: #fff; text-align: center;
+  white-space: nowrap;
+}
+.sev-badge.big { padding: 3px 8px; font-size: 11px; min-width: 46px; }
+.sev-badge.sev-critical { background: var(--red); }
+.sev-badge.sev-high { background: var(--orange); }
+.sev-badge.sev-warn { background: var(--yellow); }
+.sev-badge.sev-ok { background: var(--green); }
+
+/* ===== Disclaimer ===== */
+.disclaimer {
+  font-size: 10.5px; color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 7px 10px; border-radius: 5px;
+  border: 1px dashed var(--border);
+}
+
+.empty {
+  padding: 28px 14px; text-align: center;
+  color: var(--text-muted); font-size: 12px;
+}

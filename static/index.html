@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>처방 보조 프로그램</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  .landing {
+    max-width: 680px; margin: 80px auto; padding: 0 20px;
+    text-align: center;
+  }
+  .landing .logo-big {
+    width: 60px; height: 60px; margin: 0 auto 18px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--blue-600), var(--blue-900));
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 22px;
+  }
+  .landing h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.02em; }
+  .landing .sub { color: var(--text-muted); font-size: 13.5px; margin-bottom: 30px; }
+  .landing .choice {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  .landing a.tile {
+    display: block; text-decoration: none; color: inherit;
+    padding: 22px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px;
+    transition: all 0.15s;
+  }
+  .landing a.tile:hover {
+    border-color: var(--blue-600);
+    box-shadow: 0 4px 18px rgba(26, 111, 179, 0.15);
+    transform: translateY(-2px);
+  }
+  .landing .tile .icon { font-size: 32px; margin-bottom: 10px; }
+  .landing .tile .name { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+  .landing .tile .desc { font-size: 11.5px; color: var(--text-muted); line-height: 1.55; }
+  .landing .footer { margin-top: 40px; font-size: 11px; color: var(--text-muted); }
+  @media (max-width: 520px) {
+    .landing .choice { grid-template-columns: 1fr; }
+    .landing { margin: 40px auto; }
+  }
+</style>
+</head>
+<body>
+<div class="landing">
+  <div class="logo-big">Rx+</div>
+  <h1>처방 보조 프로그램</h1>
+  <div class="sub">의사의 처방 의사결정을 보조하는 실시간 임상 참고 도구</div>
+  <div class="choice">
+    <a class="tile" href="접수.html">
+      <div class="icon">📋</div>
+      <div class="name">접수 스테이션</div>
+      <div class="desc">환자 문진표 · 기저질환 · 기존 처방 · 검사결과 입력</div>
+    </a>
+    <a class="tile" href="의사.html">
+      <div class="icon">🩺</div>
+      <div class="name">의사 모니터</div>
+      <div class="desc">환자 정보 확인 · 처방 분석 · 1·2 추천 확인</div>
+    </a>
+  </div>
+  <div class="footer">ⓘ 본 프로그램은 참고용 보조 도구이며, 최종 처방 판단과 책임은 의사에게 있습니다.</div>
+</div>
+</body>
+</html>
