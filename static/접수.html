@@ -50,9 +50,15 @@
     <div class="sub">환자 문진 · 기저질환 · 기존 처방 · 검사결과 입력</div>
   </div>
   <div class="spacer"></div>
-  <a class="link" href="index.html">← 홈</a>
-  <a class="link" href="의사.html" target="_blank">🩺 의사 모니터 열기</a>
+  <a class="link js-shell-hide" href="index.html">← 홈</a>
+  <a class="link js-shell-hide" href="의사.html" target="_blank">🩺 의사 모니터 열기</a>
 </header>
+<script>
+  // 통합 셸(index.html iframe) 안에서 실행 중이면 헤더 링크 숨김
+  if (window.self !== window.top) {
+    document.querySelectorAll(".js-shell-hide").forEach(el => el.style.display = "none");
+  }
+</script>
 
 <div class="page">
   <div class="layout">

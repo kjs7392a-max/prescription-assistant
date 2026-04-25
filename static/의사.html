@@ -833,8 +833,13 @@
     <div class="sub">실시간 처방 분석 · 1·2 추천</div>
   </div>
   <div class="spacer"></div>
-  <a class="link" href="index.html">홈</a>
+  <a class="link js-shell-hide" href="index.html">홈</a>
 </header>
+<script>
+  if (window.self !== window.top) {
+    document.querySelectorAll(".js-shell-hide").forEach(el => el.style.display = "none");
+  }
+</script>
 
 <div class="page" id="page">
   <div class="queue-bar" id="queueBar"></div>

@@ -26,6 +26,16 @@ uvicorn app.main:app --reload --port 8000
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
+## Railway 배포
+
+1. railway.com → New Project → **Deploy from GitHub repo** → `kjs7392a-max/prescription-assistant`
+2. 같은 프로젝트에 `+ New` → **Database** → **Add PostgreSQL** (자동으로 `DATABASE_URL` 환경변수 주입)
+3. 서비스 설정 → **Variables**에 추가:
+   - `ANTHROPIC_API_KEY` = `sk-ant-...`
+   - `APP_ENV` = `production`
+4. **Settings → Networking → Generate Domain** → 공개 URL 발급
+5. `Procfile`에 따라 `alembic upgrade head` 후 uvicorn 자동 실행
+
 ## 테이블 구조
 
 - `patient_profiles` — 환자 프로파일 (15대 질환 플래그, Lab 수치)
