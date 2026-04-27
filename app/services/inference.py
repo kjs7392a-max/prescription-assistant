@@ -14,6 +14,8 @@ from app.schemas.inference import (
     PrescriptionSummary,
     CompactDetails,
     GDMTStep,
+    ClinicalEvidence,
+    ClinicalEvidenceRef,
     PsychiatricRec,
     RxItem,
     RecommendationSet,
@@ -45,10 +47,14 @@ _SYSTEM_PROMPT = """\
   · note: 1줄 사유.
 - recommendation_set.secondary: 2차 대체 세트(부작용 발생 시·금기 시).
 
-- gdmt_steps: Step 1~5 (max 5).
-  · 정신과 진단(우울/조현/조울/공황 등)이 메인이면 Step 1~3에 정신과약 배치.
-  · 동반 심혈관/대사 질환은 Step 4~5에 (병용 안전성 관점).
+- gdmt_steps: 이번 의사 메모(증상·진단·처방 계획) 기반 치료 단계 가이드라인. Step 1~5 (max 5).
+  · 반드시 메모에 적힌 현재 증상·예상진단·처방 약물에 맞는 가이드라인으로 구성하라.
+  · 환청/망상/조현병 의심 → KMAP 2024 항정신병약 단계 치료 (1차 약물 선택, 용량 적정화, 심혈관 모니터).
+  · 우울/불안/불면 → 항우울제·항불안제·수면제 단계 치료.
+  · 리스페리돈 등 특정 약물 → QTc 연장·기립성 저혈압 위험 단계 모니터 포함.
+  · 기저질환 일반 GDMT(심부전 ACC/AHA 4단계, 당뇨 ADA 단계 등)는 gdmt_steps에 포함 금지 — details.guidelines에만 기재.
   · 정신과 1차약은 심독성 낮은 항정신병제 우선: **Aripiprazole 5~10mg QD** 또는 **Quetiapine 25~50mg HS**.
+  · 각 step에 "clinical_evidence" 포함: {"rationale":"해당 단계 선택 근거 1줄","refs":[{"label":"TRIAL명 — 학회지 YYYY","pmid":"숫자"}]}. refs는 최대 2개.
 
 - psychiatric: 메모에 우울·망상·환청·공격성·불면·불안 키워드 보이면 detected=true.
   · 감지 시: drug=본원 처방 약제(Aripiprazole/Quetiapine/Sertraline 등),
@@ -59,9 +65,9 @@ _SYSTEM_PROMPT = """\
 - warnings: 최대 3개, 각 1줄.
   · psychiatric.detected=true 시 **반드시** "정신과 약물 병용 시 QT 간격 연장 및 저혈압 위험 모니터링" 또는 동등 의미 문구 1개 포함.
 
-- guidelines: 학회명·연도만 (예: "ACC/AHA 2023 HF", "KMAP 2024"). 최대 5개.
+- guidelines: 이번 메모의 증상·진단·처방에 직접 관련된 가이드라인만. 학회명·연도 (예: "KMAP 2024", "CINP 2017 조현병", "NICE 2022 우울"). 최대 5개. 기저질환 일반 가이드라인(ACC/AHA HF 등)은 제외.
 
-- details: 긴 설명·RCT·PMID는 모두 여기에.
+- details: 긴 설명·RCT·PMID + 기저질환 GDMT 배경 정보(심부전 단계별 약물, 당뇨 단계 등)는 모두 여기에.
 
 ## 출력 JSON 스키마 (이 순서 그대로)
 {
@@ -73,7 +79,7 @@ _SYSTEM_PROMPT = """\
     "secondary":[]
   },
   "gdmt_steps":[
-    {"step":1,"drug":"성분명 용량 복용법","note":"선택 이유"}
+    {"step":1,"drug":"성분명 용량 복용법","note":"선택 이유","clinical_evidence":{"rationale":"근거 1줄","refs":[{"label":"TRIAL — Journal YYYY","pmid":"12345678"}]}}
   ],
   "psychiatric":{"detected":true|false,"drug":"권고 약제","consult":"용량/모니터/재평가"},
   "warnings":["DDI/부작용 1줄"],
@@ -414,6 +420,23 @@ class InferenceEngine:
             s = s[:limit].rstrip() + "…"
         return s
 
+    def _parse_clinical_evidence(self, raw) -> ClinicalEvidence | None:
+        if not isinstance(raw, dict):
+            return None
+        rationale = self._one_line(raw.get("rationale", ""), 120)
+        refs = []
+        for r in (raw.get("refs") or [])[:2]:
+            if not isinstance(r, dict):
+                continue
+            label = self._one_line(r.get("label", ""), 80)
+            if label:
+                refs.append(ClinicalEvidenceRef(
+                    label=label,
+                    pmid=str(r["pmid"]) if r.get("pmid") else None,
+                    url=r.get("url"),
+                ))
+        return ClinicalEvidence(rationale=rationale, refs=refs) if (rationale or refs) else None
+
     def _build_compact(
         self,
         data: dict,
@@ -530,8 +553,9 @@ class InferenceEngine:
                 step_num = len(steps) + 1
             drug = self._one_line(s.get("drug", ""), 80)
             note = self._one_line(s.get("note", ""), 80)
+            ev = self._parse_clinical_evidence(s.get("clinical_evidence"))
             if drug:
-                steps.append(GDMTStep(step=step_num, drug=drug, note=note))
+                steps.append(GDMTStep(step=step_num, drug=drug, note=note, clinical_evidence=ev))
         if not steps:
             for i, g in enumerate(prescription_set[:4], 1):
                 dose = f"{int(g.strength_mg)}mg " if g.strength_mg else ""

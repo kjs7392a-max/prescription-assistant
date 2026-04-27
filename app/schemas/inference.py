@@ -42,10 +42,22 @@ class CompactDetails(BaseModel):
     notes: str = ""
 
 
+class ClinicalEvidenceRef(BaseModel):
+    label: str
+    pmid: Optional[str] = None
+    url: Optional[str] = None
+
+
+class ClinicalEvidence(BaseModel):
+    rationale: str = ""
+    refs: list[ClinicalEvidenceRef] = []
+
+
 class GDMTStep(BaseModel):
     step: int            # 1~5 (5 = 정신건강 관리)
     drug: str
     note: str = ""
+    clinical_evidence: Optional[ClinicalEvidence] = None
 
 
 class PsychiatricRec(BaseModel):

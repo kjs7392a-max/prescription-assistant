@@ -1064,7 +1064,28 @@
     await _patchPatient(dbId, { clinical_notes: _buildClinicalNotes(p, "waiting") });
   }
 
+  async function patchLabs(dbId, labs, labNotes) {
+    const p = _cache.find(x => x._dbId === dbId);
+    if (!p) return;
+    p.labs    = { ...(p.labs || {}), ...labs };
+    p.labNotes = labNotes ?? p.labNotes ?? "";
+    await _patchPatient(dbId, {
+      lab_values:    _buildLabValues(p.labs),
+      clinical_notes: _buildClinicalNotes(p, "waiting"),
+    });
+  }
+
+  async function patchPrescription(dbId, prescription) {
+    const p = _cache.find(x => x._dbId === dbId);
+    if (!p) return;
+    p.prescription = prescription;
+    await _patchPatient(dbId, {
+      current_medications: { history: p.history || "", prescription },
+      clinical_notes: _buildClinicalNotes(p, "waiting"),
+    });
+  }
+
   global.RxAssist = {
-    BASE_DISEASES_15, loadQueue, saveQueue, patchNote, subscribe, analyze,
+    BASE_DISEASES_15, loadQueue, saveQueue, patchNote, patchLabs, patchPrescription, subscribe, analyze,
   };
 })(window);

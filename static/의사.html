@@ -88,6 +88,44 @@
   }
   .note-panel textarea:focus { outline: none; background: #fcfdfe; }
 
+  /* 의사 직접 편집 UI */
+  .btn-edit {
+    margin-left: 6px; padding: 1px 7px; font-size: 10.5px; font-weight: 600;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: #fff; color: var(--text-dim); cursor: pointer; vertical-align: middle;
+  }
+  .btn-edit:hover { background: var(--blue-50); border-color: var(--blue-600); color: var(--blue-700); }
+  .inline-edit-form {
+    margin-top: 8px; padding: 10px; background: #f8fafc;
+    border: 1px solid var(--border-soft); border-radius: 6px;
+  }
+  .edit-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-bottom: 8px;
+  }
+  .edit-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; font-weight: 600; color: var(--text-dim); }
+  .edit-grid input {
+    padding: 4px 7px; border: 1px solid var(--border); border-radius: 4px;
+    font-size: 12px; font-family: inherit; background: #fff;
+  }
+  .edit-grid input:focus { outline: none; border-color: var(--blue-600); }
+  .inline-edit-form textarea {
+    width: 100%; box-sizing: border-box; padding: 6px 8px;
+    border: 1px solid var(--border); border-radius: 4px;
+    font-size: 12px; font-family: inherit; resize: vertical; min-height: 50px;
+    margin-bottom: 8px;
+  }
+  .inline-edit-form textarea:focus { outline: none; border-color: var(--blue-600); }
+  .edit-actions { display: flex; gap: 6px; }
+  .btn-edit-save {
+    padding: 4px 14px; font-size: 12px; font-weight: 700;
+    background: var(--blue-600); color: #fff; border: none; border-radius: 4px; cursor: pointer;
+  }
+  .btn-edit-save:hover { background: var(--blue-700, #1555a0); }
+  .btn-edit-cancel {
+    padding: 4px 10px; font-size: 12px; font-weight: 600;
+    background: #fff; color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+  }
+
   .note-footer {
     display: flex; align-items: center; justify-content: space-between;
     padding: 5px 8px 5px 10px; background: var(--surface-2);
@@ -1085,22 +1123,37 @@
       <div class="std-core ${core ? "" : "empty"}">${core ? escapeHtml(core) : (streaming ? "분석 중…" : "—")}</div>
     </div>`;
 
-    // ── [GDMT 단계] ──
+    // ── [GDMT 단계별 가이드라인 권고] ──
     const steps = r.gdmt_steps || [];
     if (steps.length || streaming) {
+      const _sm = {
+        1:"핵심 GDMT (1차 기반)", 2:"추가 GDMT (표준 병용)",
+        3:"보조 (위험군 강화)", 4:"추가 보호 (합병증 예방)", 5:"정신건강 (본원 처방)"
+      };
       html += `<div class="std-section">
-        <div class="lbl">${streaming && steps.length < 4 ? '<span class="live-dot"></span>' : ""}📋 GDMT 단계</div>`;
+        <div class="lbl">${streaming && steps.length < 5 ? '<span class="live-dot"></span>' : ""}🏥 GDMT 단계별 가이드라인 권고
+          <span class="sub" style="font-size:10.5px;color:var(--text-muted);font-weight:400;">· 분과별 학회 알고리즘 기반 최적 처방 경로</span>
+        </div>
+        <div class="gdmt-legend">
+          <span class="lg-item"><span class="lg-dot p1"></span><b>1단계</b> 핵심 GDMT — 1차 기반 약물 (예: ACEI/ARB)</span>
+          <span class="lg-item"><span class="lg-dot p2"></span><b>2단계</b> 추가 GDMT — 표준 병용 (예: β차단제)</span>
+          <span class="lg-item"><span class="lg-dot p3"></span><b>3단계</b> 보조 — 위험군 강화 (예: MRA)</span>
+          <span class="lg-item"><span class="lg-dot p4"></span><b>4단계</b> 추가 보호 — 장기 합병증 예방 (예: SGLT2i)</span>
+          <span class="lg-item"><span class="lg-dot p5"></span><b>5단계</b> 정신건강 — 본원 정신과 처방 (심독성 낮은 항정신병제 우선)</span>
+        </div>`;
       if (steps.length) {
-        html += `<div class="std-steps">`;
-        html += steps.slice(0, 4).map(s => `
-          <div class="std-step">
-            <div class="num">${s.step || "·"}</div>
-            <div class="body">
-              <div class="drug">${escapeHtml(s.drug || "")}</div>
-              ${s.note ? `<div class="note">${escapeHtml(s.note)}</div>` : ""}
+        html += steps.slice(0, 5).map(s => `
+          <div class="gdmt-item">
+            <div class="gdmt-left">
+              <div class="gdmt-p p${s.step}">${s.step}단계</div>
+              <div class="gdmt-meaning">${_sm[s.step] || ""}</div>
+            </div>
+            <div class="gdmt-body">
+              <div class="gdmt-drug">${escapeHtml(s.drug || "")}</div>
+              ${s.note ? `<div class="gdmt-reason">${escapeHtml(s.note)}</div>` : ""}
+              ${evHtml(s.clinical_evidence)}
             </div>
           </div>`).join("");
-        html += `</div>`;
       } else if (streaming) {
         html += `<div class="std-streaming">단계 생성 중</div>`;
       }
@@ -1297,8 +1350,23 @@
           <div class="content">${bases.length ? bases.map(b=>`<span class="chip" style="margin:2px 3px 2px 0;">${b}</span>`).join("") : '<span style="color:var(--text-muted);">없음</span>'}</div>
         </div>
         <div class="info-block">
-          <h3>검사결과</h3>
+          <h3>검사결과 <button class="btn-edit" id="btnEditLabs">✏️ 편집</button></h3>
           <div class="content" id="labsContent"></div>
+          <div class="inline-edit-form" id="labsEditForm" style="display:none;">
+            <div class="edit-grid">
+              <label>eGFR (mL/min/1.73㎡)<input id="edit_eGFR" type="number" min="0" max="200" step="1"></label>
+              <label>AST/ALT (U/L)<input id="edit_ASTALT" type="text" placeholder="예: 32/28"></label>
+              <label>K⁺ (mmol/L)<input id="edit_K" type="number" min="0" max="10" step="0.1"></label>
+              <label>Na⁺ (mmol/L)<input id="edit_Na" type="number" min="0" max="200" step="1"></label>
+              <label>QTc (ms)<input id="edit_QTc" type="number" min="0" max="700" step="1"></label>
+              <label>BP (mmHg)<input id="edit_BP" type="text" placeholder="예: 120/80"></label>
+            </div>
+            <textarea id="edit_labNotes" placeholder="기타 검사·소견 자유 입력"></textarea>
+            <div class="edit-actions">
+              <button class="btn-edit-save" id="btnSaveLabs">저장</button>
+              <button class="btn-edit-cancel" id="btnCancelLabs">취소</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1311,17 +1379,29 @@
       <div class="two-col">
         <div class="note-panel">
           <div class="card-head"><span>진단 내용</span><span class="sub">· 증상·진단명·계획 입력</span></div>
-          <textarea id="noteInput" placeholder="예)&#10;주소: 3일 전부터 우측 무릎 통증&#10;진단: 골관절염 (M17.1)&#10;계획: 단기 진통제 + 물리치료 권고">${currentNote}</textarea>
+          <textarea id="noteInput" placeholder="1. 증상&#10;2. 예상진단&#10;3. 계획">${currentNote}</textarea>
           <div class="note-footer">
             <span>다음 방문 시 히스토리로 표시됩니다.</span>
             <button class="btn-save" id="btnSaveNote">저장</button>
           </div>
         </div>
         <div class="rx-panel">
-          <div class="card-head"><span>최근 처방전</span><span class="sub">· 접수 스테이션 입력 기준</span></div>
-          ${patient.prescription
-            ? `<pre class="rx-content">${patient.prescription}</pre>`
-            : `<div class="rx-empty">접수 스테이션에서<br>처방 정보를 입력하면<br>여기에 표시됩니다.</div>`}
+          <div class="card-head">
+            <span>최근 처방전</span><span class="sub">· 접수 기준 · 의사 수정 가능</span>
+            <button class="btn-edit" id="btnEditRx" style="margin-left:auto;">✏️ 편집</button>
+          </div>
+          <div id="rxDisplay">
+            ${patient.prescription
+              ? `<pre class="rx-content">${patient.prescription}</pre>`
+              : `<div class="rx-empty">접수 스테이션에서<br>처방 정보를 입력하면<br>여기에 표시됩니다.</div>`}
+          </div>
+          <div class="inline-edit-form" id="rxEditForm" style="display:none; margin:8px 10px 10px;">
+            <textarea id="edit_prescription" rows="7" placeholder="처방 내용을 직접 입력하세요"></textarea>
+            <div class="edit-actions">
+              <button class="btn-edit-save" id="btnSaveRx">저장</button>
+              <button class="btn-edit-cancel" id="btnCancelRx">취소</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1350,21 +1430,6 @@
           <span class="sub" style="font-size:11px; color:var(--text-muted);">· 개별 약물 금기·경고 체크</span>
         </div>
         <div id="drugList"></div>
-      </div>
-
-      <div class="card">
-        <div class="analysis-head">
-          <span style="font-size:12.5px; font-weight:700;">🏥 GDMT 단계별 가이드라인 권고</span>
-          <span class="sub" style="font-size:11px; color:var(--text-muted);">· 분과별 학회 알고리즘 기반 최적 처방 경로</span>
-        </div>
-        <div class="gdmt-legend">
-          <span class="lg-item"><span class="lg-dot p1"></span><b>1단계</b> 핵심 GDMT — 1차 기반 약물 (예: ACEI/ARB)</span>
-          <span class="lg-item"><span class="lg-dot p2"></span><b>2단계</b> 추가 GDMT — 표준 병용 (예: β차단제)</span>
-          <span class="lg-item"><span class="lg-dot p3"></span><b>3단계</b> 보조 — 위험군 강화 (예: MRA)</span>
-          <span class="lg-item"><span class="lg-dot p4"></span><b>4단계</b> 추가 보호 — 장기 합병증 예방 (예: SGLT2i)</span>
-          <span class="lg-item"><span class="lg-dot p5"></span><b>5단계</b> 정신건강 — 본원 정신과 처방 (심독성 낮은 항정신병제 우선)</span>
-        </div>
-        <div id="gdmtList"></div>
       </div>
 
       <div class="card">
@@ -1421,6 +1486,103 @@
     }
 
     btnSave.addEventListener("click", saveNote);
+
+    /* ── 검사결과 편집 ─────────────────────────────────────── */
+    const btnEditLabs   = document.getElementById("btnEditLabs");
+    const labsEditForm  = document.getElementById("labsEditForm");
+    const btnSaveLabs   = document.getElementById("btnSaveLabs");
+    const btnCancelLabs = document.getElementById("btnCancelLabs");
+
+    function _openLabsForm() {
+      const l = patient.labs || {};
+      document.getElementById("edit_eGFR").value  = l.eGFR  ?? "";
+      document.getElementById("edit_ASTALT").value = l.ASTALT ?? "";
+      document.getElementById("edit_K").value     = l.K     ?? "";
+      document.getElementById("edit_Na").value    = l.Na    ?? "";
+      document.getElementById("edit_QTc").value   = l.QTc   ?? "";
+      document.getElementById("edit_BP").value    = l.BP    ?? "";
+      document.getElementById("edit_labNotes").value = patient.labNotes || "";
+      labsEditForm.style.display = "block";
+      btnEditLabs.textContent = "✕ 닫기";
+    }
+    function _closeLabsForm() {
+      labsEditForm.style.display = "none";
+      btnEditLabs.textContent = "✏️ 편집";
+    }
+    btnEditLabs.addEventListener("click", () =>
+      labsEditForm.style.display === "none" ? _openLabsForm() : _closeLabsForm()
+    );
+    btnCancelLabs.addEventListener("click", _closeLabsForm);
+    btnSaveLabs.addEventListener("click", async () => {
+      const toNum = (id) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; };
+      const newLabs = {
+        eGFR:   toNum("edit_eGFR"),
+        ASTALT: document.getElementById("edit_ASTALT").value.trim() || null,
+        K:      toNum("edit_K"),
+        Na:     toNum("edit_Na"),
+        QTc:    toNum("edit_QTc"),
+        BP:     document.getElementById("edit_BP").value.trim() || null,
+      };
+      const newLabNotes = document.getElementById("edit_labNotes").value.trim();
+      // null 제거
+      Object.keys(newLabs).forEach(k => newLabs[k] == null && delete newLabs[k]);
+      btnSaveLabs.textContent = "저장 중…";
+      btnSaveLabs.disabled = true;
+      if (patient._dbId) await RxAssist.patchLabs(patient._dbId, newLabs, newLabNotes);
+      // 인메모리 즉시 반영
+      patient.labs    = { ...(patient.labs || {}), ...newLabs };
+      patient.labNotes = newLabNotes;
+      // 검사결과 표시 갱신
+      const labItems2 = [
+        { name: "eGFR",   val: patient.labs.eGFR,   unit: "mL/min/1.73㎡", flag: patient.labs.eGFR  && patient.labs.eGFR  < 60  ? "low"  : "" },
+        { name: "AST/ALT",val: patient.labs.ASTALT, unit: "U/L" },
+        { name: "K⁺",     val: patient.labs.K,      unit: "mmol/L", flag: patient.labs.K && (patient.labs.K < 3.5 || patient.labs.K > 5.0) ? "high" : "" },
+        { name: "Na⁺",    val: patient.labs.Na,     unit: "mmol/L" },
+        { name: "QTc",    val: patient.labs.QTc,    unit: "ms",    flag: patient.labs.QTc && patient.labs.QTc > 450 ? "high" : "" },
+        { name: "BP",     val: patient.labs.BP,     unit: "mmHg" },
+      ].filter(x => x.val !== null && x.val !== undefined && x.val !== "");
+      const labsContent2 = document.getElementById("labsContent");
+      labsContent2.innerHTML = labItems2.length === 0 && !patient.labNotes
+        ? '<span style="color:var(--text-muted);">검사결과 미입력</span>'
+        : labItems2.map(x => `<div class="lab-row"><span class="name">${x.name}</span><span class="val ${x.flag||''}">${x.val} <span style="color:var(--text-muted); font-weight:400; font-size:10px;">${x.unit}</span></span></div>`).join("")
+          + (patient.labNotes ? `<div style="margin-top:6px; padding-top:6px; border-top: 1px dashed var(--border-soft); font-size: 11px;">${patient.labNotes}</div>` : "");
+      btnSaveLabs.textContent = "저장";
+      btnSaveLabs.disabled = false;
+      _closeLabsForm();
+    });
+
+    /* ── 최근 처방전 편집 ──────────────────────────────────── */
+    const btnEditRx   = document.getElementById("btnEditRx");
+    const rxEditForm  = document.getElementById("rxEditForm");
+    const btnSaveRx   = document.getElementById("btnSaveRx");
+    const btnCancelRx = document.getElementById("btnCancelRx");
+
+    function _openRxForm() {
+      document.getElementById("edit_prescription").value = patient.prescription || "";
+      rxEditForm.style.display = "block";
+      btnEditRx.textContent = "✕ 닫기";
+    }
+    function _closeRxForm() {
+      rxEditForm.style.display = "none";
+      btnEditRx.textContent = "✏️ 편집";
+    }
+    btnEditRx.addEventListener("click", () =>
+      rxEditForm.style.display === "none" ? _openRxForm() : _closeRxForm()
+    );
+    btnCancelRx.addEventListener("click", _closeRxForm);
+    btnSaveRx.addEventListener("click", async () => {
+      const newRx = document.getElementById("edit_prescription").value;
+      btnSaveRx.textContent = "저장 중…";
+      btnSaveRx.disabled = true;
+      if (patient._dbId) await RxAssist.patchPrescription(patient._dbId, newRx);
+      patient.prescription = newRx;
+      document.getElementById("rxDisplay").innerHTML = newRx
+        ? `<pre class="rx-content">${newRx}</pre>`
+        : `<div class="rx-empty">접수 스테이션에서<br>처방 정보를 입력하면<br>여기에 표시됩니다.</div>`;
+      btnSaveRx.textContent = "저장";
+      btnSaveRx.disabled = false;
+      _closeRxForm();
+    });
 
     // [🔄 재분석] — 메모 재저장 없이 즉시 LLM 재호출
     const btnRe = document.getElementById("btnReanalyze");
