@@ -31,7 +31,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
-@app.get("/")
+@app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "prescription-guide", "version": "0.3.0"}
 
