@@ -1924,15 +1924,14 @@
 
   function shareKakao() {
     const url = window.location.href;
-    if (navigator.share) {
-      navigator.share({ title: "처방 보조 시스템", url }).catch(() => {});
-    } else {
+    const kakaoUrl = "kakaotalk://send?text=" + encodeURIComponent(url);
+    window.location.href = kakaoUrl;
+    // 카카오톡 미설치(PC 등) fallback — 300ms 후에도 앱이 안 열리면 클립보드 복사
+    setTimeout(() => {
       navigator.clipboard.writeText(url).then(() => {
         showEmrToast("링크가 복사되었습니다 — 카카오톡에 붙여넣기 하세요");
-      }).catch(() => {
-        prompt("아래 링크를 복사하세요", url);
-      });
-    }
+      }).catch(() => {});
+    }, 300);
   }
 
   function showEmrToast(msg) {
