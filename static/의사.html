@@ -793,6 +793,17 @@
     .rx-row .freq { display: none; }
   }
 
+  /* ─────────── 카카오톡 공유 버튼 ─────────── */
+  .btn-kakao-share {
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 14px;
+    background: #FEE500; border: none; border-radius: 8px;
+    color: #191919; font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn-kakao-share:hover  { background: #f5dc00; }
+  .btn-kakao-share:active { opacity: 0.85; }
+
   /* ─────────── EMR 복사 버튼 ─────────── */
   .emr-copy-wrap {
     grid-column: 1 / -1;
@@ -1438,7 +1449,13 @@
       </div>
       <div class="note-footer">
         <span>진단 내용 기반 AI 분석이 자동 실행됩니다.</span>
-        <button class="btn-save" id="btnSaveNote">분석조회</button>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn-kakao-share" id="btnKakaoShare" onclick="shareKakao()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.477 3 2 6.477 2 10.5c0 2.572 1.554 4.836 3.91 6.228l-.997 3.687 4.29-2.747A11.2 11.2 0 0 0 12 18c5.523 0 10-3.477 10-7.5S17.523 3 12 3Z"/></svg>
+            카카오톡 공유
+          </button>
+          <button class="btn-save" id="btnSaveNote">분석조회</button>
+        </div>
       </div>
 
 
@@ -1903,6 +1920,19 @@
       document.body.removeChild(ta);
       showEmrToast("EMR에 붙여넣을 준비가 되었습니다 ✓");
     });
+  }
+
+  function shareKakao() {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: "처방 보조 시스템", url }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        showEmrToast("링크가 복사되었습니다 — 카카오톡에 붙여넣기 하세요");
+      }).catch(() => {
+        prompt("아래 링크를 복사하세요", url);
+      });
+    }
   }
 
   function showEmrToast(msg) {
