@@ -793,6 +793,35 @@
     .rx-row .freq { display: none; }
   }
 
+  /* ─────────── EMR 복사 버튼 ─────────── */
+  .emr-copy-wrap {
+    grid-column: 1 / -1;
+    padding-top: 4px;
+  }
+  .btn-emr-copy {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    width: 100%; padding: 10px 0;
+    background: #f0f9ff; border: 1px solid #7dd3fc;
+    border-radius: 8px; color: #0369a1; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn-emr-copy:hover { background: #e0f2fe; border-color: #38bdf8; }
+  .btn-emr-copy:active { background: #bae6fd; }
+  .emr-btn-main { font-size: 13px; font-weight: 700; }
+  .emr-btn-sub  { font-size: 11px; color: #0284c7; font-weight: 400; }
+
+  /* ─────────── 토스트 알림 ─────────── */
+  #emr-toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #1e293b; color: #f1f5f9;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 9999; white-space: nowrap;
+  }
+  #emr-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
   /* ─────────── Risperidone 심혈관 위험 알림 ─────────── */
   .risp-banner, .risp-alt-card, .risp-monitor { grid-column: 1 / -1; }
   .risp-banner {
@@ -1807,6 +1836,15 @@
 
     html += renderTable(primary, "primary", "1차 추천 세트", "주치료 + 방어제");
     html += renderTable(secondary, "secondary", "2차 대체", "부작용·금기 발생 시 전환");
+    if (primary.length) {
+      html += `
+        <div class="emr-copy-wrap">
+          <button class="btn-emr-copy" onclick="copyEmrToClipboard()">
+            <span class="emr-btn-main">📋 EMR 처방전 복사</span>
+            <span class="emr-btn-sub">처방을 EMR에 복사해서 넣을 수 있습니다</span>
+          </button>
+        </div>`;
+    }
 
     // ── Risperidone 처방 강행 시 필수 모니터링 footer
     if (rispDetected) {
@@ -1825,6 +1863,54 @@
 
     html += `</div>`;
     recList.innerHTML = html;
+
+    // 토스트 DOM 최초 1회 생성
+    if (!document.getElementById("emr-toast")) {
+      const t = document.createElement("div");
+      t.id = "emr-toast";
+      document.body.appendChild(t);
+    }
+  }
+
+  /**
+   * 1차 추천 세트를 탭 구분 EMR 규격 텍스트로 변환 후 클립보드에 복사.
+   * 규격: 약품명\t용량\t일투\t일수
+   */
+  function copyEmrToClipboard() {
+    const r = partialResult || {};
+    const items = (r.recommendation_set?.primary) || [];
+    if (!items.length) return;
+
+    const lines = items.map(it => {
+      const name  = it.generic_name_ko || "";
+      const dose  = it.strength        || "";
+      const freq  = it.frequency       || "";
+      const days  = "";               // 일수는 의사가 EMR에서 직접 입력
+      return [name, dose, freq, days].join("\t");
+    });
+
+    const text = lines.join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      showEmrToast("EMR에 붙여넣을 준비가 되었습니다 ✓");
+    }).catch(() => {
+      // 클립보드 API 미지원 환경 fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      showEmrToast("EMR에 붙여넣을 준비가 되었습니다 ✓");
+    });
+  }
+
+  function showEmrToast(msg) {
+    const t = document.getElementById("emr-toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 2800);
   }
 
   /**
