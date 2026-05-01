@@ -137,21 +137,86 @@ Response: 위 JSON 구조 반환.
 ```
 app/
 ├── models/
-│   ├── lab_history.py       (신규)
-│   └── feedback.py          (신규)
+│   ├── lab_history.py
+│   └── feedback.py
 ├── schemas/
-│   ├── lab_history.py       (신규)
-│   ├── feedback.py          (신규)
-│   └── inference.py         (신규)
+│   ├── history.py           ← NormalizedDrug, HistoryDrug, HistoryMatch, HistorySafetyResult
+│   ├── lab_history.py
+│   ├── feedback.py
+│   └── inference.py
 ├── crud/
-│   ├── lab_history.py       (신규)
-│   └── feedback.py          (신규)
+│   ├── lab_history.py
+│   └── feedback.py
 ├── services/
 │   ├── llm/
-│   │   ├── __init__.py      (신규)
-│   │   ├── base.py          (신규)
-│   │   └── claude.py        (신규)
-│   └── inference.py         (신규)
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   └── claude.py
+│   ├── drug_normalizer.py   ← DRUG_MASTER_DB, _NAME_INDEX, normalize_drug_name()
+│   ├── history_engine.py    ← 4단계 re-ranking 파이프라인
+│   ├── fast_track.py        ← Track A (LLM 없이 즉시 계산)
+│   └── inference.py
 └── routers/
-    └── inference.py         (신규)
+    └── inference.py         ← SSE 2-track 스트리밍 엔드포인트
+```
+
+---
+
+## 5. History-Based Re-ranking (결정론적 레이어)
+
+LLM 응답(Track B) 수신 후 즉시 적용되는 결정론적 후처리 파이프라인.
+
+### 흐름
+
+```
+EMR text / PrescriptionLog
+  → parse_prescription_history()    # HistoryDrug 리스트
+  → match_history_to_current_visit() # 진단·증상 일치도 계산 (HistoryMatch)
+  → evaluate_history_drug_safety()  # Lab·DDI·부작용·성분중복 안전성 판정
+  → enforce_history_priority()      # primary 최상단 배치 (최대 2개)
+```
+
+### NormalizedDrug 스키마 (`app/schemas/history.py`)
+
+| 필드 | 설명 |
+|---|---|
+| `ingredient_code` | ATC code (예: A10BA02) |
+| `ingredient_names` | 성분명 목록 (영문+한글) |
+| `drug_class` | 약물 분류 (예: biguanide) |
+| `is_combination` | 복합제 여부 |
+| `components` | 복합제 성분 DB key 목록 |
+| `strength` | raw_name에서 자동 추출한 용량 (예: 500mg) |
+
+### `_NAME_INDEX` 빌드 규칙
+
+복합제(`combination=True`)의 `ingredient_names`는 인덱스에서 제외.
+단일 성분명이 복합제에 의해 덮어씌워지는 것을 방지.
+
+```python
+# 올바른 동작
+normalize_drug_name("메트포르민").drug_class  # → "biguanide"  (not "biguanide+SGLT2")
+normalize_drug_name("자누메트").is_combination  # → True
+normalize_drug_name("글루코파지 500mg").strength  # → "500mg"
+```
+
+### `is_duplicate_ingredient(drug1, drug2)`
+
+단일제 ↔ 복합제 교차 포함, n제 복합제 간 1개 이상 성분 일치 시 `True`.
+판별 순서: ATC code → 영문 ingredient_names 교집합 → 전체 교집합.
+
+### 안전성 판정 단계 (evaluate_history_drug_safety)
+
+④ Lab 규칙은 `_iter_drug_and_components(nd)`로 복합제 성분별 개별 적용.
+⑤-a 성분 중복(`is_duplicate_ingredient`) → `risk_level="contraindicated"`.
+⑤-b DDI (drug_class 쌍 기반).
+
+### SSE 스트리밍 엔드포인트
+
+`POST /api/v1/inference/analyze/stream`
+
+```
+event: fast   → Track A 결과 (즉시, <0.3s)
+event: chunk  → LLM 스트리밍 청크
+event: result → Track B 파싱 완료 + history re-ranking 적용
+event: done   → 스트림 종료
 ```

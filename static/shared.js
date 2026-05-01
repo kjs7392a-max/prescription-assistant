@@ -343,21 +343,107 @@
     // 정신과 — SNRI
     { key: "duloxetine",     names: ["duloxetine",     "둘록세틴"],        class: "SNRI" },
     { key: "venlafaxine",    names: ["venlafaxine",    "벤라팍신"],        class: "SNRI" },
+    // 정신과 — 항정신병약 (SGA)
+    { key: "risperidone",    names: ["risperidone",    "리스페리돈",   "risperdal", "리스페달"],
+      class: "SGA",          productNames: ["리스페달", "리스페리달"], aliases: ["risperidal"] },
+    { key: "quetiapine",     names: ["quetiapine",     "쿠에티아핀",   "quetiax",   "쿠에티악스"],
+      class: "SGA",          productNames: ["세로켈", "퀘티아핀"], aliases: ["seroquel"] },
+    { key: "aripiprazole",   names: ["aripiprazole",   "아리피프라졸", "abilify",   "아빌리파이"],
+      class: "SGA",          productNames: ["아빌리파이", "아리피"], aliases: ["abilify"] },
+    { key: "olanzapine",     names: ["olanzapine",     "올란자핀",    "zyprexa",   "자이프렉사"],
+      class: "SGA",          productNames: ["자이프렉사", "올란"],   aliases: [] },
+    { key: "paliperidone",   names: ["paliperidone",   "팔리페리돈",  "invega",    "인베가"],
+      class: "SGA",          productNames: ["인베가"],               aliases: [] },
+    // 정신과 — 항정신병약 (FGA)
+    { key: "haloperidol",    names: ["haloperidol",    "할로페리돌",  "haldol",    "할돌"],
+      class: "FGA",          productNames: ["할돌"],                  aliases: [] },
+    // 정신과 — SSRI 추가
+    { key: "escitalopram",   names: ["escitalopram",   "에스시탈로프람", "에스시탈로프"],
+      class: "SSRI",         productNames: ["렉사프로", "렉사"],      aliases: ["lexapro"] },
+    { key: "fluoxetine",     names: ["fluoxetine",     "플루옥세틴",  "prozac",    "프로작"],
+      class: "SSRI",         productNames: ["프로작"],                aliases: [] },
+    { key: "paroxetine",     names: ["paroxetine",     "파록세틴",    "paxil",     "팍실"],
+      class: "SSRI",         productNames: ["팍실"],                  aliases: [] },
+    { key: "fluvoxamine",    names: ["fluvoxamine",    "플루복사민",  "루복스"],
+      class: "SSRI",         productNames: ["루복스"],                aliases: [] },
+    // 정신과 — NaSSA
+    { key: "mirtazapine",    names: ["mirtazapine",    "미르타자핀",  "레메론"],
+      class: "NaSSA",        productNames: ["레메론"],                aliases: [] },
+    // 정신과 — 수면제/진정제
+    { key: "zolpidem",       names: ["zolpidem",       "졸피뎀",      "stilnox",   "스틸녹스"],
+      class: "Z-drug",       productNames: ["스틸녹스"],              aliases: [] },
+    { key: "trazodone",      names: ["trazodone",      "트라조돈",    "trittico",  "트리티코"],
+      class: "SARI",         productNames: ["트리티코"],              aliases: [] },
+    { key: "clonazepam",     names: ["clonazepam",     "클로나제팜",  "리보트릴"],
+      class: "BZD",          productNames: ["리보트릴"],              aliases: [] },
+    // 정신과 — 기분안정제
+    { key: "lithium",        names: ["lithium",        "리튬",        "eskalith",  "에스칼리스"],
+      class: "mood-stabilizer", productNames: ["리튬카보네이트"], aliases: [] },
+    { key: "valproate",      names: ["valproate",      "발프로에이트","발프로산","depakote","데파코트","depakine","데파킨"],
+      class: "mood-stabilizer", productNames: ["데파코트", "데파킨"], aliases: ["valproic acid"] },
+    { key: "lamotrigine",    names: ["lamotrigine",    "라모트리진",  "lamictal",  "라믹탈"],
+      class: "mood-stabilizer", productNames: ["라믹탈"],             aliases: [] },
+    // 정신과 — ADHD
+    { key: "methylphenidate",names: ["methylphenidate","메틸페니데이트","ritalin","리탈린","concerta","콘서타"],
+      class: "stimulant",    productNames: ["콘서타", "리탈린"],      aliases: [] },
+    { key: "atomoxetine",    names: ["atomoxetine",    "아토목세틴",  "strattera", "스트라테라"],
+      class: "NRI",          productNames: ["스트라테라"],            aliases: [] },
+    // 정신과 — NDRI
+    { key: "bupropion",      names: ["bupropion",      "부프로피온",  "wellbutrin","웰부트린"],
+      class: "NDRI",         productNames: ["웰부트린"],              aliases: [] },
+    // 엽산 (MTX 동반)
+    { key: "folic_acid",     names: ["folic acid", "folic", "엽산", "folate"],
+      class: "vitamin",      productNames: [],                        aliases: [] },
+    // MTX
+    { key: "methotrexate",   names: ["methotrexate",   "메토트렉세이트", "MTX"],
+      class: "DMARD",        productNames: [],                        aliases: [] },
   ];
+
+  function _normalizeText(s) {
+    return (s || "").toLowerCase().replace(/\s+/g, "").replace(/[-·.]/g, "");
+  }
+
+  function normalizeDrugName(rawName) {
+    const lower = _normalizeText(rawName);
+    const found = DRUG_DB.find(d => {
+      if (d.names.some(n => lower.includes(_normalizeText(n)))) return true;
+      if (d.productNames?.some(n => lower.includes(_normalizeText(n)))) return true;
+      if (d.aliases?.some(n => lower.includes(_normalizeText(n)))) return true;
+      return false;
+    });
+    if (!found) return null;
+    return {
+      key: found.key,
+      normalizedName: found.names[1] || found.names[0],
+      drugClass: found.class,
+      productNames: found.productNames || [],
+      aliases: found.aliases || [],
+    };
+  }
+
+  function matchDrugByAlias(text) {
+    const lower = _normalizeText(text);
+    return DRUG_DB.find(d =>
+      d.aliases?.some(a => lower.includes(_normalizeText(a))) ||
+      d.productNames?.some(p => lower.includes(_normalizeText(p)))
+    ) || null;
+  }
 
   function parseDrug(line) {
     const raw = line.trim();
     if (!raw) return null;
     const lower = raw.toLowerCase();
-    const found = DRUG_DB.find(d => d.names.some(n => lower.includes(n.toLowerCase())));
-    if (!found) return null;  // DB에 없는 약물명·일반 텍스트는 무시
+
+    let found = DRUG_DB.find(d => d.names.some(n => lower.includes(n.toLowerCase())));
+    if (!found) found = matchDrugByAlias(raw);
+    if (!found) return null;
 
     const strMatch = raw.match(/(\d+(?:\.\d+)?)\s*(mg|mcg|g|unit|iu|㎎)/i);
     const doseMatch = raw.match(/\b(qd|bid|tid|qid|qhs|prn|q\d+h|아침|저녁|식후|식전)\b/i);
 
     return {
       raw,
-      name: found.names[0].toUpperCase().slice(0,1) + found.names[0].slice(1),
+      name: found.names[1] || found.names[0],
       key: found.key,
       drugClass: found.class,
       strength: strMatch ? strMatch[0] : "",
@@ -1087,5 +1173,6 @@
 
   global.RxAssist = {
     BASE_DISEASES_15, loadQueue, saveQueue, patchNote, patchLabs, patchPrescription, subscribe, analyze,
+    normalizeDrugName, parseDrug,
   };
 })(window);

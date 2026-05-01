@@ -1,6 +1,11 @@
 """Fast-Track 1단계 엔진 — LLM 없이 정규식/사전 기반으로 방어 약물·용량 조절을 <0.3초 내 계산."""
 import re
 from app.schemas.inference import RecommendedGeneric
+from app.services.history_engine import (
+    parse_prescription_history,
+    match_history_to_current_visit,
+    evaluate_history_drug_safety,
+)
 
 
 _NSAID_KEYS = [
@@ -44,15 +49,21 @@ def quick_safety_set(
     diseases: dict | None,
     lab_values: dict | None,
     patient_age: int | None = None,
+    prescription_history: str | None = None,
+    current_medications: str | None = None,
+    allergies: list[str] | None = None,
 ) -> dict:
     """정규식·사전 기반 즉시 응답.
 
     반환:
       {
-        "defense_drugs": [RecommendedGeneric ... ],   # 방어 약물 세트
-        "dose_adjustments": [str, ...],               # 용량 조절 안내 텍스트
-        "contraindicated": [str, ...],                # 금기 성분
-        "lab_flags": [str, ...],                      # Lab 기반 즉시 경고
+        "defense_drugs": [RecommendedGeneric ... ],
+        "dose_adjustments": [str, ...],
+        "contraindicated": [str, ...],
+        "lab_flags": [str, ...],
+        "history_priority_candidates": [HistorySafetyResult, ...],
+        "history_safety_warnings": [str, ...],
+        "history_excluded": [str, ...],
       }
     """
     note = physician_note or ""
@@ -213,6 +224,44 @@ def quick_safety_set(
             ],
         }
 
+    # ── 처방 히스토리 빠른 안전성 평가 ──
+    history_priority_candidates = []
+    history_safety_warnings: list[str] = []
+    history_excluded: list[str] = []
+    if prescription_history or current_medications:
+        history_text = "\n".join(filter(None, [prescription_history, current_medications]))
+        try:
+            history_drugs = parse_prescription_history(history_text, [])
+            if history_drugs:
+                matched = match_history_to_current_visit(
+                    history_drugs,
+                    physician_note,
+                    {},
+                    list(active),
+                )
+                lab_for_safety = dict(lab)
+                if patient_age is not None:
+                    lab_for_safety["_patient_age"] = patient_age
+                safety_results = evaluate_history_drug_safety(
+                    matched,
+                    [],
+                    allergies or [],
+                    lab_for_safety,
+                    [],
+                )
+                history_priority_candidates = [
+                    r for r in safety_results if r.is_eligible
+                ]
+                for r in safety_results:
+                    history_safety_warnings.extend(r.warnings)
+                    if not r.is_eligible:
+                        history_excluded.append(
+                            r.match.history_drug.normalized_name
+                            + (f" ({', '.join(r.exclude_reasons)})" if r.exclude_reasons else "")
+                        )
+        except Exception:
+            pass
+
     return {
         "defense_drugs": [d.model_dump() for d in defense],
         "dose_adjustments": adjustments,
@@ -222,4 +271,7 @@ def quick_safety_set(
         "psychiatric_warnings": psy_warnings,
         "egfr_steps": egfr_steps,
         "risperidone_alert": risperidone_alert,
+        "history_priority_candidates": history_priority_candidates,
+        "history_safety_warnings": history_safety_warnings,
+        "history_excluded": history_excluded,
     }

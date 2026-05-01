@@ -3,6 +3,7 @@ from datetime import date
 from typing import Optional, Literal
 from pydantic import BaseModel
 from app.models.patient import LabValues, DiseaseFlags
+from app.schemas.history import HistoryPriorityInfo
 
 
 class InferenceRequest(BaseModel):
@@ -103,3 +104,6 @@ class InferenceResponse(BaseModel):
     evidence_commentary: str = ""
     key_rct_references: list[str] = []
     deep_insight: str = ""
+
+    # ── 히스토리 우선순위 정보 ──
+    history_priority: Optional[HistoryPriorityInfo] = None

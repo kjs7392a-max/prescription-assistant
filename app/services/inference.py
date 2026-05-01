@@ -20,8 +20,15 @@ from app.schemas.inference import (
     RxItem,
     RecommendationSet,
 )
+from app.schemas.history import HistoryPriorityInfo
 from app.services.delta import format_delta_for_prompt
 from app.services.llm.base import BaseLLMProvider
+from app.services.history_engine import (
+    parse_prescription_history,
+    match_history_to_current_visit,
+    evaluate_history_drug_safety,
+    enforce_history_priority,
+)
 
 _SYSTEM_PROMPT = """\
 당신은 처방 가이드 AI다. 의사가 3초 안에 스캔 가능한 한국어 JSON만 출력한다.
@@ -47,19 +54,16 @@ _SYSTEM_PROMPT = """\
   · note: 1줄 사유.
 - recommendation_set.secondary: 2차 대체 세트(부작용 발생 시·금기 시).
 
-- gdmt_steps: 이번 의사 메모(증상·진단·처방 계획) 기반 치료 단계 가이드라인. Step 1~5 (max 5).
-  · 반드시 메모에 적힌 현재 증상·예상진단·처방 약물에 맞는 가이드라인으로 구성하라.
-  · 환청/망상/조현병 의심 → KMAP 2024 항정신병약 단계 치료 (1차 약물 선택, 용량 적정화, 심혈관 모니터).
-  · 우울/불안/불면 → 항우울제·항불안제·수면제 단계 치료.
+- gdmt_steps: **진단명** 기반 치료 단계 가이드라인. Step 1~4 (max 4). Step 5(정신과)는 아래 psychiatric 규칙에서만 결정.
+  · 반드시 진단명에 명시된 질환의 가이드라인으로만 구성하라. 증상 키워드만으로 단계를 추가하지 마라.
   · 리스페리돈 등 특정 약물 → QTc 연장·기립성 저혈압 위험 단계 모니터 포함.
-  · 기저질환 일반 GDMT(심부전 ACC/AHA 4단계, 당뇨 ADA 단계 등)는 gdmt_steps에 포함 금지 — details.guidelines에만 기재.
-  · 정신과 1차약은 심독성 낮은 항정신병제 우선: **Aripiprazole 5~10mg QD** 또는 **Quetiapine 25~50mg HS**.
+  · 기저질환 일반 GDMT(심부전 ACC/AHA, 당뇨 ADA 등)는 gdmt_steps에 포함 금지 — details.guidelines에만 기재.
   · 각 step에 "clinical_evidence" 포함: {"rationale":"해당 단계 선택 근거 1줄","refs":[{"label":"TRIAL명 — 학회지 YYYY","pmid":"숫자"}]}. refs는 최대 2개.
 
-- psychiatric: 메모에 우울·망상·환청·공격성·불면·불안 키워드 보이면 detected=true.
-  · 감지 시: drug=본원 처방 약제(Aripiprazole/Quetiapine/Sertraline 등),
-    consult=**용량 적정화·재평가 시점·모니터 항목** 안내 (예: "2주 후 재평가, QTc 모니터").
-  · "정신과 협진" 문구 금지 — 본원이 정신과의원이다.
+- psychiatric: **진단명**에 정신과 질환(우울증·조현병·양극성장애·불안장애·불면증 등)이 명시된 경우에만 detected=true.
+  · 증상란에만 우울·불안·불면 등이 언급된 경우(예: "통증으로 인한 불면")는 detected=false.
+  · 감지 시: drug=적합한 정신과 약제(Aripiprazole/Quetiapine/Sertraline 등),
+    consult=**용량 적정화·재평가 시점·모니터 항목** 안내.
   · 미감지 시: detected=false, drug="", consult="".
 
 - warnings: 최대 3개, 각 1줄.
@@ -96,10 +100,12 @@ _SYSTEM_PROMPT = """\
 class InferenceEngine:
     def __init__(self, llm: BaseLLMProvider) -> None:
         self._llm = llm
+        self._last_physician_note: str = ""
 
     async def analyze(
         self, db: AsyncSession, request: InferenceRequest
     ) -> InferenceResponse:
+        self._last_physician_note = request.physician_note
         # Priority 1: 부작용·수정 이력 조회
         feedbacks = await get_patient_feedbacks(db, request.patient_id)
 
@@ -183,39 +189,22 @@ class InferenceEngine:
                     lines.append(f"   메모: {log.physician_notes}")
             lines.append("")
 
+        # EMR 처방이력 (접수 시 입력)
+        if patient:
+            meds = patient.current_medications or {}
+            history_text = meds.get("history", "").strip() if isinstance(meds, dict) else ""
+            if history_text:
+                lines.append("## 이전 방문 처방 이력 (EMR)")
+                lines.append(history_text)
+                lines.append("")
+
         lines.append("## 의사 메모 (이번 진료)")
         lines.append(request.physician_note)
         lines.append("")
 
-        # 정신과 키워드 자동 감지 → 힌트 주입
-        psy_hint = self._detect_psychiatric(request.physician_note or "")
-        if psy_hint:
-            lines.append("## 자동 감지 — 본원 정신과 처방 트랙")
-            lines.append(f"- 감지 키워드: {', '.join(psy_hint)}")
-            lines.append("- 본원 정신과의원 처방. 외부 협진 권유 금지.")
-            lines.append("- psychiatric.detected=true. consult에는 용량 적정화·재평가 시점·모니터 항목.")
-            lines.append("- 동반 심혈관약(β차단제·이뇨제) DDI(기립성 저혈압·QT 연장)는 warnings에 배치.")
-            lines.append("")
-
         lines.append("위 정보를 바탕으로 표준 JSON만 출력하라.")
 
         return "\n".join(lines)
-
-    @staticmethod
-    def _detect_psychiatric(text: str) -> list[str]:
-        keymap = {
-            "우울": "depression", "depress": "depression",
-            "망상": "psychosis", "환청": "psychosis", "환각": "psychosis",
-            "공격성": "agitation", "공격적": "agitation", "초조": "agitation",
-            "불면": "insomnia", "insomn": "insomnia",
-            "불안": "anxiety", "공황": "anxiety",
-        }
-        t = text.lower()
-        found: list[str] = []
-        for k, tag in keymap.items():
-            if k.lower() in t and tag not in found:
-                found.append(tag)
-        return found
 
     def _build_gdmt_context(self, patient) -> str:
         """환자 프로파일 기반 적용 가능 GDMT 컨텍스트 생성"""
@@ -316,6 +305,7 @@ class InferenceEngine:
         self, db: AsyncSession, request: InferenceRequest
     ) -> AsyncIterator[str]:
         """LLM 응답을 청크 단위로 스트리밍. 마지막에 __DONE__ 전송."""
+        self._last_physician_note = request.physician_note
         feedbacks   = await get_patient_feedbacks(db, request.patient_id)
         lab_history = await get_recent_lab_history(db, request.patient_id, limit=3)
         recent_logs = (await get_logs_by_patient(db, request.patient_id))[:3]
@@ -328,6 +318,72 @@ class InferenceEngine:
         async for chunk in self._llm.stream_complete(system=_SYSTEM_PROMPT, user=user_prompt):
             yield chunk
         yield "__DONE__"
+
+    def apply_history_priority(
+        self,
+        response: InferenceResponse,
+        patient,
+        feedbacks: list,
+        recent_logs: list,
+        disease_updates=None,
+    ) -> InferenceResponse:
+        """히스토리 기반 결정론적 re-ranking을 InferenceResponse에 적용."""
+        try:
+            meds = patient.current_medications or {} if patient else {}
+            history_text = "\n".join(filter(None, [
+                meds.get("history", "").strip() if isinstance(meds, dict) else "",
+                meds.get("prescription", "").strip() if isinstance(meds, dict) else "",
+            ]))
+            if not history_text and not recent_logs:
+                return response
+
+            history_drugs = parse_prescription_history(history_text, recent_logs)
+            if not history_drugs:
+                return response
+
+            patient_diseases = list({
+                k for k, v in (patient.diseases or {}).items() if v is True
+            }) if patient else []
+            disease_update_dict = disease_updates.model_dump() if disease_updates else {}
+
+            matched = match_history_to_current_visit(
+                history_drugs,
+                self._last_physician_note,
+                disease_update_dict,
+                patient_diseases,
+            )
+            if not matched:
+                return response
+
+            lab = (patient.lab_values or {}) if patient else {}
+            lab_for_safety = dict(lab)
+            if patient and hasattr(patient, "age") and patient.age:
+                lab_for_safety["_patient_age"] = patient.age
+
+            allergies = (patient.allergies or []) if patient else []
+            safety_results = evaluate_history_drug_safety(
+                matched,
+                [],
+                allergies,
+                lab_for_safety,
+                feedbacks,
+            )
+            if not safety_results:
+                return response
+
+            # 모든 결과(eligible + excluded) 전달 — enforce 내부에서 분기 처리
+            new_rec_set, extra_warnings, priority_info = enforce_history_priority(
+                response.recommendation_set,
+                response.prescription_set,
+                safety_results,
+            )
+            response.recommendation_set = new_rec_set
+            if extra_warnings:
+                response.warnings = (extra_warnings + response.warnings)[:3]
+            response.history_priority = priority_info
+        except Exception:
+            pass
+        return response
 
     @staticmethod
     def _sanitize_json(text: str) -> str:
