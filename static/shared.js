@@ -1147,6 +1147,7 @@
     const p = _cache.find(x => x._dbId === dbId);
     if (!p) return;
     p.note = noteText;
+    _lastFp = _queueFingerprint(_cache);
     await _patchPatient(dbId, { clinical_notes: _buildClinicalNotes(p, "waiting") });
   }
 
@@ -1165,6 +1166,7 @@
     const p = _cache.find(x => x._dbId === dbId);
     if (!p) return;
     p.prescription = prescription;
+    _lastFp = _queueFingerprint(_cache);
     await _patchPatient(dbId, {
       current_medications: { history: p.history || "", prescription },
       clinical_notes: _buildClinicalNotes(p, "waiting"),
