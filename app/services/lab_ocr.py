@@ -61,7 +61,7 @@ async def parse_image(image_bytes: bytes) -> dict:
     try:
         data = _extract_json(raw)
         return {"parsed": True, "items": data.get("items", []), "raw_text": raw}
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError, AttributeError):
         return {"parsed": False, "items": [], "raw_text": raw}
 
 
@@ -76,5 +76,5 @@ async def parse_text(raw_text: str) -> dict:
     try:
         data = _extract_json(raw)
         return {"parsed": True, "items": data.get("items", []), "raw_text": raw}
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError, AttributeError):
         return {"parsed": False, "items": [], "raw_text": raw}
