@@ -12,3 +12,6 @@ build/
 .claude/
 *.log
 uvicorn.log
+
+# Git worktrees
+.worktrees/
