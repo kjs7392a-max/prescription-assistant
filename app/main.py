@@ -37,9 +37,9 @@ async def health_check():
     return {"status": "ok", "service": "prescription-guide", "version": "0.3.0"}
 
 
-_uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
-if os.path.isdir(_uploads_dir):
-    app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+_uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
+os.makedirs(_uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 _static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 if os.path.isdir(_static_dir):

@@ -13,7 +13,10 @@ from app.schemas.lab_submission import LabSubmissionResponse, LabSubmissionConfi
 
 router = APIRouter(prefix="/lab-upload", tags=["lab-upload"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "lab_photos")
+UPLOAD_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "lab_photos")
+)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 class TextParseRequest(BaseModel):
@@ -31,7 +34,6 @@ async def upload_photo(
 
     filename = f"{uuid.uuid4()}.jpg"
     file_path = os.path.join(UPLOAD_DIR, filename)
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
     with open(file_path, "wb") as f:
         f.write(image_bytes)
 
