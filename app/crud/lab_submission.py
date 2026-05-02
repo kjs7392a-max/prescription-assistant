@@ -2,22 +2,16 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.lab_submission import LabSubmission
+from app.schemas.lab_submission import LabSubmissionCreate
 
 
-async def create_submission(
-    db: AsyncSession,
-    photo_path: str,
-    parsed_values: dict | None,
-    raw_text: str | None,
-    is_parsed: bool,
-    source: str = "photo",
-) -> LabSubmission:
+async def create_submission(db: AsyncSession, data: LabSubmissionCreate) -> LabSubmission:
     sub = LabSubmission(
-        photo_path=photo_path,
-        parsed_values=parsed_values,
-        raw_text=raw_text,
-        is_parsed=is_parsed,
-        source=source,
+        photo_path=data.photo_path,
+        parsed_values=data.parsed_values,
+        raw_text=data.raw_text,
+        is_parsed=data.is_parsed,
+        source=data.source,
     )
     db.add(sub)
     await db.commit()

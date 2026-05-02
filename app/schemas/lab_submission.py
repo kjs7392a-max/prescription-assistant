@@ -18,6 +18,14 @@ class LabSubmissionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class LabSubmissionCreate(BaseModel):
+    photo_path: Optional[str] = None
+    parsed_values: Optional[dict] = None
+    raw_text: Optional[str] = None
+    is_parsed: bool = False
+    source: str = "photo"
+
+
 class LabSubmissionConfirm(BaseModel):
     patient_code: str
     lab_values: dict
