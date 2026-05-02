@@ -51,7 +51,7 @@ async def record_lab_snapshot_raw(
     lab_values: dict,
     source: str,
 ) -> PatientLabHistory:
-    """OCR 파싱 결과(raw dict)를 PatientLabHistory에 직접 저장."""
+    """OCR 파싱 결과(raw dict)를 PatientLabHistory에 직접 저장하고 프로파일 최신값 갱신."""
     snapshot = PatientLabHistory(
         patient_id=patient_id,
         recorded_at=recorded_at,
@@ -59,6 +59,14 @@ async def record_lab_snapshot_raw(
         source=source,
     )
     db.add(snapshot)
+
+    result = await db.execute(
+        select(PatientProfile).where(PatientProfile.id == patient_id)
+    )
+    patient = result.scalar_one_or_none()
+    if patient:
+        patient.lab_values = lab_values
+
     await db.commit()
     await db.refresh(snapshot)
     return snapshot

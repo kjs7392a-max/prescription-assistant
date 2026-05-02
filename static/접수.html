@@ -362,6 +362,12 @@
         .map(i => `<span style="margin-right:10px;"><b>${i.name}</b> ${i.value ?? '-'} ${i.unit ?? ''}</span>`)
         .join('');
       window._parsedLabItems = data.items;
+      // populate _parsedLabs for inference queue submission
+      if (typeof window._parsedLabs !== 'undefined') {
+        data.items.forEach(item => {
+          if (item.value != null) window._parsedLabs[item.name] = item.value;
+        });
+      }
     } catch {
       statusEl.textContent = '오류 발생';
     }

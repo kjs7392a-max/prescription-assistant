@@ -40,7 +40,7 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-async def parse_image(image_bytes: bytes) -> dict:
+async def parse_image(image_bytes: bytes, media_type: str = "image/jpeg") -> dict:
     """이미지 바이트를 받아 검사 수치 목록을 반환한다."""
     b64 = base64.standard_b64encode(image_bytes).decode()
     message = await _client.messages.create(
@@ -51,7 +51,7 @@ async def parse_image(image_bytes: bytes) -> dict:
             "content": [
                 {
                     "type": "image",
-                    "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
+                    "source": {"type": "base64", "media_type": media_type, "data": b64},
                 },
                 {"type": "text", "text": _IMAGE_PROMPT},
             ],

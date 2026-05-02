@@ -45,3 +45,53 @@ async def test_text_parse_returns_items(client):
     data = response.json()
     assert data["parsed"] is True
     assert data["items"][0]["name"] == "혈당"
+
+
+@pytest.mark.asyncio
+async def test_confirm_submission(client, db_session):
+    from app.models.patient import PatientProfile, DiseaseFlags, LabValues
+    # Create a real patient
+    patient = PatientProfile(
+        patient_code="TEST-CONFIRM-001",
+        age=50,
+        gender="M",
+        diseases=DiseaseFlags().model_dump(),
+        lab_values=LabValues().model_dump(),
+        allergies=[],
+    )
+    db_session.add(patient)
+    await db_session.commit()
+
+    # Create a pending submission
+    with patch("app.routers.lab_upload.parse_image", AsyncMock(return_value=MOCK_OCR)):
+        upload_res = await client.post(
+            "/api/v1/lab-upload/photo",
+            files={"photo": ("test.jpg", b"fake_jpeg_bytes", "image/jpeg")},
+        )
+    submission_id = upload_res.json()["id"]
+
+    # Confirm it
+    from datetime import datetime
+    confirm_res = await client.patch(
+        f"/api/v1/lab-upload/{submission_id}/confirm",
+        json={
+            "patient_code": "TEST-CONFIRM-001",
+            "lab_values": {"혈당": 105.0},
+            "recorded_at": datetime.utcnow().isoformat(),
+        },
+    )
+    assert confirm_res.status_code == 200
+    data = confirm_res.json()
+    assert data["status"] == "saved"
+    assert data["patient_id"] is not None
+
+    # Double confirm should 409
+    confirm_res2 = await client.patch(
+        f"/api/v1/lab-upload/{submission_id}/confirm",
+        json={
+            "patient_code": "TEST-CONFIRM-001",
+            "lab_values": {"혈당": 105.0},
+            "recorded_at": datetime.utcnow().isoformat(),
+        },
+    )
+    assert confirm_res2.status_code == 409

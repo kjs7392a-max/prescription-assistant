@@ -18,6 +18,8 @@ UPLOAD_DIR = os.path.abspath(
 )
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
+
 
 class TextParseRequest(BaseModel):
     raw_text: str
@@ -31,13 +33,16 @@ async def upload_photo(
     image_bytes = await photo.read()
     if len(image_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="사진 크기가 10MB를 초과합니다.")
+    content_type = photo.content_type or "image/jpeg"
+    if content_type not in ALLOWED_MIME:
+        raise HTTPException(status_code=415, detail="지원하지 않는 이미지 형식입니다. JPEG/PNG/WebP만 가능합니다.")
 
     filename = f"{uuid.uuid4()}.jpg"
     file_path = os.path.join(UPLOAD_DIR, filename)
     with open(file_path, "wb") as f:
         f.write(image_bytes)
 
-    ocr_result = await parse_image(image_bytes)
+    ocr_result = await parse_image(image_bytes, media_type=content_type)
     relative_path = f"uploads/lab_photos/{filename}"
 
     data = LabSubmissionCreate(
@@ -69,6 +74,8 @@ async def confirm_submission(
     sub = await sub_crud.get_submission(db, submission_id)
     if not sub:
         raise HTTPException(status_code=404, detail="제출 건을 찾을 수 없습니다.")
+    if sub.status == "saved":
+        raise HTTPException(status_code=409, detail="이미 저장된 제출 건입니다.")
     patient = await patient_crud.get_patient_by_code(db, body.patient_code)
     if not patient:
         raise HTTPException(status_code=404, detail=f"차트번호 {body.patient_code} 환자를 찾을 수 없습니다.")
