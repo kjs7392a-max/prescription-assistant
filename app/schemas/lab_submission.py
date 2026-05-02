@@ -8,6 +8,7 @@ class LabSubmissionResponse(BaseModel):
     id: uuid.UUID
     photo_path: Optional[str]
     parsed_values: Optional[dict]
+    raw_text: Optional[str]
     is_parsed: bool
     patient_id: Optional[uuid.UUID]
     source: str
