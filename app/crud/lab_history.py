@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.lab_history import PatientLabHistory
@@ -41,3 +42,31 @@ async def get_recent_lab_history(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def record_lab_snapshot_raw(
+    db: AsyncSession,
+    patient_id: uuid.UUID,
+    recorded_at: datetime,
+    lab_values: dict,
+    source: str,
+) -> PatientLabHistory:
+    """OCR 파싱 결과(raw dict)를 PatientLabHistory에 직접 저장하고 프로파일 최신값 갱신."""
+    snapshot = PatientLabHistory(
+        patient_id=patient_id,
+        recorded_at=recorded_at,
+        lab_values=lab_values,
+        source=source,
+    )
+    db.add(snapshot)
+
+    result = await db.execute(
+        select(PatientProfile).where(PatientProfile.id == patient_id)
+    )
+    patient = result.scalar_one_or_none()
+    if patient:
+        patient.lab_values = lab_values
+
+    await db.commit()
+    await db.refresh(snapshot)
+    return snapshot

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>검사지 접수</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans KR', -apple-system, sans-serif;
+    background: #0f172a; color: #f1f5f9;
+    min-height: 100dvh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px;
+    gap: 24px;
+  }
+  .logo { font-size: 28px; font-weight: 900; color: #60a5fa; letter-spacing: -1px; }
+  .title { font-size: 18px; font-weight: 700; text-align: center; }
+  .desc { font-size: 13px; color: #94a3b8; text-align: center; line-height: 1.6; }
+  .upload-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px;
+    width: 100%; max-width: 320px;
+    padding: 32px 20px;
+    background: #1e3a5f; border: 2px dashed #3b82f6;
+    border-radius: 16px; cursor: pointer;
+    font-size: 15px; font-weight: 700; color: #93c5fd;
+    transition: background 0.15s;
+  }
+  .upload-btn:active { background: #1e40af; }
+  .upload-btn .icon { font-size: 48px; }
+  input[type=file] { display: none; }
+  .preview { width: 100%; max-width: 320px; border-radius: 12px; display: none; }
+  .send-btn {
+    width: 100%; max-width: 320px;
+    padding: 16px;
+    background: #2563eb; border: none; border-radius: 12px;
+    color: #fff; font-size: 16px; font-weight: 700; cursor: pointer;
+    display: none;
+  }
+  .send-btn:disabled { background: #374151; color: #6b7280; cursor: not-allowed; }
+  .status { font-size: 14px; font-weight: 600; text-align: center; min-height: 20px; }
+  .status.ok { color: #4ade80; }
+  .status.err { color: #f87171; }
+</style>
+</head>
+<body>
+<div class="logo">Rx+</div>
+<div class="title">검사지 접수</div>
+<div class="desc">검사 결과지를 카메라로 촬영하여 전송하면<br>접수 데스크에서 자동으로 처리됩니다.</div>
+
+<label class="upload-btn" id="uploadLabel">
+  <span class="icon">📋</span>
+  <span>검사지 촬영하기</span>
+  <input type="file" id="photoInput" accept="image/*" capture="environment" />
+</label>
+
+<img class="preview" id="preview" alt="촬영된 검사지" />
+<button class="send-btn" id="sendBtn">접수하기</button>
+<div class="status" id="statusMsg"></div>
+
+<script>
+  const photoInput = document.getElementById('photoInput');
+  const preview = document.getElementById('preview');
+  const sendBtn = document.getElementById('sendBtn');
+  const statusMsg = document.getElementById('statusMsg');
+  let selectedFile = null;
+
+  photoInput.addEventListener('change', () => {
+    selectedFile = photoInput.files[0];
+    if (!selectedFile) return;
+    const url = URL.createObjectURL(selectedFile);
+    preview.src = url;
+    preview.style.display = 'block';
+    sendBtn.style.display = 'block';
+    statusMsg.textContent = '';
+    statusMsg.className = 'status';
+  });
+
+  sendBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    sendBtn.disabled = true;
+    sendBtn.textContent = '전송 중…';
+    statusMsg.textContent = '';
+
+    const form = new FormData();
+    form.append('photo', selectedFile, selectedFile.name);
+
+    try {
+      const res = await fetch('/api/v1/lab-upload/photo', { method: 'POST', body: form });
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+      statusMsg.textContent = '✓ 접수되었습니다. 잠시 후 접수 데스크에서 확인합니다.';
+      statusMsg.className = 'status ok';
+      sendBtn.style.display = 'none';
+      preview.style.display = 'none';
+      selectedFile = null;
+    } catch (e) {
+      statusMsg.textContent = '오류가 발생했습니다. 다시 시도해 주세요.';
+      statusMsg.className = 'status err';
+      sendBtn.disabled = false;
+      sendBtn.textContent = '접수하기';
+    }
+  });
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from app.routers import patients, drugs, prescriptions, inference, lab_history
+from app.routers import patients, drugs, prescriptions, inference, lab_history, lab_upload
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -19,6 +19,7 @@ app.include_router(drugs.router, prefix="/api/v1")
 app.include_router(prescriptions.router, prefix="/api/v1")
 app.include_router(inference.router)          # already has /api/v1/inference prefix
 app.include_router(lab_history.router, prefix="/api/v1")
+app.include_router(lab_upload.router, prefix="/api/v1")
 
 
 @app.exception_handler(Exception)
@@ -35,6 +36,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 async def health_check():
     return {"status": "ok", "service": "prescription-guide", "version": "0.3.0"}
 
+
+_uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
+os.makedirs(_uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 _static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 if os.path.isdir(_static_dir):

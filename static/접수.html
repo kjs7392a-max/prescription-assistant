@@ -121,6 +121,10 @@
           <label class="field">
             <textarea class="input" id="f_labs_raw" rows="4" placeholder="검사 결과를 붙여넣으세요..."></textarea>
           </label>
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <button class="btn ghost" id="parseLabsBtn" style="font-size:12px; padding:4px 12px;">🔍 자동 파싱</button>
+            <span id="parseLabsStatus" style="font-size:11px; color:var(--text-muted); align-self:center;"></span>
+          </div>
           <div id="labs_parsed_preview" style="font-size: 0.85rem; color: #4a90e2; margin-top: 4px; min-height: 1.2em;"></div>
         </div>
 
@@ -143,6 +147,19 @@
         <button class="btn danger" id="clearAll" style="padding: 3px 10px; font-size: 11px;">전체 삭제</button>
       </div>
       <div class="queue-list" id="queueList"></div>
+    </div>
+  </div>
+
+  <!-- 사진 검사지 대기 패널 -->
+  <div id="photoSubmissionPanel" style="margin-top:14px; display:none;">
+    <div class="card">
+      <div class="card-head">
+        <span>📸 검사지 사진 접수</span>
+        <span class="sub" id="pendingCount">· 대기 0건</span>
+      </div>
+      <div class="card-body col" style="gap:10px;">
+        <div id="pendingList" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
     </div>
   </div>
 
@@ -319,6 +336,99 @@
 
   RxAssist.subscribe(renderQueue);
   renderQueue();
+
+  /* ===== EMR 파싱 버튼 ===== */
+  document.getElementById('parseLabsBtn').addEventListener('click', async () => {
+    const raw = document.getElementById('f_labs_raw').value.trim();
+    const statusEl = document.getElementById('parseLabsStatus');
+    const previewEl = document.getElementById('labs_parsed_preview');
+    if (!raw) { statusEl.textContent = '텍스트를 먼저 붙여넣으세요.'; return; }
+
+    statusEl.textContent = '파싱 중…';
+    previewEl.textContent = '';
+    try {
+      const res = await fetch('/api/v1/lab-upload/text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_text: raw }),
+      });
+      const data = await res.json();
+      if (!data.parsed || !data.items?.length) {
+        statusEl.textContent = '파싱 실패 — 수동 입력 필요';
+        return;
+      }
+      statusEl.textContent = `✓ ${data.items.length}개 항목 인식`;
+      previewEl.innerHTML = data.items
+        .map(i => `<span style="margin-right:10px;"><b>${i.name}</b> ${i.value ?? '-'} ${i.unit ?? ''}</span>`)
+        .join('');
+      window._parsedLabItems = data.items;
+      // populate _parsedLabs for inference queue submission
+      if (typeof window._parsedLabs !== 'undefined') {
+        data.items.forEach(item => {
+          if (item.value != null) window._parsedLabs[item.name] = item.value;
+        });
+      }
+    } catch {
+      statusEl.textContent = '오류 발생';
+    }
+  });
+
+  /* ===== 사진 제출 폴링 (2초) ===== */
+  async function fetchPendingSubmissions() {
+    try {
+      const res = await fetch('/api/v1/lab-upload/pending');
+      const list = await res.json();
+      const panel = document.getElementById('photoSubmissionPanel');
+      const countEl = document.getElementById('pendingCount');
+      const listEl = document.getElementById('pendingList');
+
+      if (!list.length) { panel.style.display = 'none'; return; }
+      panel.style.display = 'block';
+      countEl.textContent = `· 대기 ${list.length}건`;
+      listEl.innerHTML = list.map(sub => `
+        <div style="display:flex; align-items:flex-start; gap:10px; padding:10px; background:var(--surface-2); border-radius:8px; border:1px solid var(--border-soft);">
+          ${sub.photo_path
+            ? `<img src="/${sub.photo_path}" style="width:70px; height:70px; object-fit:cover; border-radius:6px; flex-shrink:0;" />`
+            : ''}
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:11px; color:var(--text-muted);">${new Date(sub.created_at).toLocaleTimeString('ko-KR')}</div>
+            ${sub.is_parsed && sub.parsed_values?.items?.length
+              ? `<div style="font-size:12px; margin-top:4px;">${sub.parsed_values.items.slice(0,4).map(i => `<b>${i.name}</b> ${i.value ?? '-'}${i.unit ?? ''}`).join(' · ')}</div>`
+              : '<div style="font-size:12px; color:var(--text-muted);">파싱 실패 — 사진 확인 필요</div>'}
+          </div>
+          <button class="btn primary" style="font-size:11px; padding:4px 10px; flex-shrink:0;"
+            onclick="confirmSubmission('${sub.id}', ${JSON.stringify(sub.parsed_values?.items ?? [])})">
+            저장
+          </button>
+        </div>
+      `).join('');
+    } catch {}
+  }
+
+  async function confirmSubmission(submissionId, items) {
+    const patientCode = prompt('환자 차트번호를 입력하세요:');
+    if (!patientCode) return;
+    const lab_values = {};
+    items.forEach(i => { if (i.value != null) lab_values[i.name] = i.value; });
+    const res = await fetch(`/api/v1/lab-upload/${submissionId}/confirm`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patient_code: patientCode.trim(),
+        lab_values,
+        recorded_at: new Date().toISOString(),
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || '저장 실패');
+      return;
+    }
+    fetchPendingSubmissions();
+  }
+
+  setInterval(fetchPendingSubmissions, 2000);
+  fetchPendingSubmissions();
 </script>
 </body>
 </html>
