@@ -73,16 +73,16 @@
         <div>
           <h2 class="section" style="margin-top:0;">기본 정보</h2>
           <div class="grid-3" style="gap: 8px;">
-            <label class="field">이름<input class="input" id="f_name" placeholder="김〇〇" /></label>
-            <label class="field">차트번호<input class="input mono" id="f_chart" placeholder="12345678" /></label>
+            <label class="field">이름<input class="input" id="f_name" /></label>
+            <label class="field">차트번호<input class="input mono" id="f_chart" /></label>
             <label class="field">성별
               <select class="input" id="f_gender">
                 <option value="M">남</option><option value="F">여</option>
               </select>
             </label>
-            <label class="field">나이<input class="input mono" id="f_age" type="number" placeholder="68" /></label>
-            <label class="field">체중(kg)<input class="input mono" id="f_weight" type="number" placeholder="65" /></label>
-            <label class="field">신장(cm)<input class="input mono" id="f_height" type="number" placeholder="170" /></label>
+            <label class="field">나이<input class="input mono" id="f_age" type="number" /></label>
+            <label class="field">체중(kg)<input class="input mono" id="f_weight" type="number" /></label>
+            <label class="field">신장(cm)<input class="input mono" id="f_height" type="number" /></label>
           </div>
           <div style="margin-top:8px; display:flex; gap:14px; font-size:12px;">
             <label><input type="checkbox" id="f_pregnant" /> 임신</label>
@@ -106,29 +106,22 @@
         <!-- 알러지 -->
         <div>
           <h2 class="section">알러지 / 부작용 이력</h2>
-          <input class="input" id="f_allergies" placeholder="예: Penicillin (발진), Sulfa (호흡곤란) — 쉼표로 구분" />
+          <input class="input" id="f_allergies" placeholder="쉼표로 구분" />
         </div>
 
         <!-- 최근 처방 -->
         <div>
           <h2 class="section">최근 처방 히스토리 (EMR)</h2>
-          <textarea class="input" id="f_history" rows="3" placeholder="예:&#10;2026-01-22 · Ciprofloxacin 500mg 1T bid × 5일&#10;2025-10-18 · NSAID 600mg 1T tid × 5일"></textarea>
+          <textarea class="input" id="f_history" rows="3"></textarea>
         </div>
 
         <!-- 검사결과 -->
         <div>
-          <h2 class="section">검사결과 (있는 경우)</h2>
-          <div class="grid-3" style="gap: 8px;">
-            <label class="field">eGFR (mL/min/1.73㎡)<input class="input mono" id="f_egfr" type="number" placeholder="45" /></label>
-            <label class="field">AST / ALT (U/L)<input class="input mono" id="f_ast" placeholder="28/24" /></label>
-            <label class="field">K⁺ (mmol/L)<input class="input mono" id="f_k" placeholder="4.6" /></label>
-            <label class="field">Na⁺ (mmol/L)<input class="input mono" id="f_na" placeholder="140" /></label>
-            <label class="field">QTc (ms)<input class="input mono" id="f_qtc" placeholder="420" /></label>
-            <label class="field">혈압 (mmHg)<input class="input mono" id="f_bp" placeholder="140/85" /></label>
-          </div>
-          <label class="field" style="margin-top:8px;">기타 검사/소견
-            <textarea class="input" id="f_labNotes" rows="2" placeholder="기타 임상 검사값·소견 메모"></textarea>
+          <h2 class="section">검사결과 통복사 (카톡/EMR)</h2>
+          <label class="field">
+            <textarea class="input" id="f_labs_raw" rows="4" placeholder="검사 결과를 붙여넣으세요..."></textarea>
           </label>
+          <div id="labs_parsed_preview" style="font-size: 0.85rem; color: #4a90e2; margin-top: 4px; min-height: 1.2em;"></div>
         </div>
 
         <!-- 제출 -->
@@ -192,6 +185,41 @@
     if (e.key === "Enter") { e.preventDefault(); document.getElementById("addCustomBase").click(); }
   });
 
+  let _parsedLabs    = { eGFR: null, ASTALT: "", K: null, Na: null, QTc: null, BP: "" };
+  let _parsedLabNotes = "";
+
+  function parseLabText(text) {
+    const n = (re) => { const m = text.match(re); return m ? parseFloat(m[1]) : null; };
+    const s = (re) => { const m = text.match(re); return m ? m[1].trim() : ""; };
+
+    const egfr  = n(/(?:eGFR|신사구체여과율)\s*[:\-]?\s*([\d.]+)/i);
+    const ast   = n(/\bAST\s*[:\-]?\s*([\d.]+)/i);
+    const alt   = n(/\bALT\s*[:\-]?\s*([\d.]+)/i);
+    const astalt = ast != null && alt != null ? `${ast}/${alt}`
+                 : ast != null               ? `${ast}`
+                 : s(/AST\s*\/\s*ALT\s*[:\-]?\s*([\d.]+\s*\/\s*[\d.]+)/i);
+    const k     = n(/\bK\+?\s*[:\-]?\s*([\d.]+)/i);
+    const na    = n(/\bNa\+?\s*[:\-]?\s*([\d.]+)/i);
+    const qtc   = n(/\bQTc?\s*[:\-]?\s*([\d.]+)/i);
+    const bp    = s(/(?:혈압|BP)\s*[:\-]?\s*([\d]+\s*\/\s*[\d]+)/i);
+    const hba1c = n(/(?:HbA1c|당화혈색소)\s*[:\-]?\s*([\d.]+)/i);
+
+    _parsedLabs    = { eGFR: egfr, ASTALT: astalt, K: k, Na: na, QTc: qtc, BP: bp };
+    _parsedLabNotes = hba1c != null ? `HbA1c ${hba1c}%` : "";
+
+    const parts = [
+      egfr  != null ? `eGFR ${egfr}`         : null,
+      astalt         ? `AST/ALT ${astalt}`   : null,
+      k     != null ? `K ${k}`               : null,
+      na    != null ? `Na ${na}`             : null,
+      qtc   != null ? `QTc ${qtc}`           : null,
+      bp             ? `BP ${bp}`            : null,
+      hba1c != null ? `HbA1c ${hba1c}%`     : null,
+    ].filter(Boolean);
+    document.getElementById("labs_parsed_preview").textContent =
+      parts.length ? "추출됨: " + parts.join(" · ") : "";
+  }
+
   function collectForm() {
     const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
     const allergies = (document.getElementById("f_allergies").value || "").split(",").map(s => s.trim()).filter(Boolean);
@@ -212,27 +240,23 @@
       customBases: [...customBases],
       allergies,
       history: document.getElementById("f_history").value.trim(),
-      labs: {
-        eGFR: num(document.getElementById("f_egfr").value),
-        ASTALT: document.getElementById("f_ast").value.trim(),
-        K: num(document.getElementById("f_k").value),
-        Na: num(document.getElementById("f_na").value),
-        QTc: num(document.getElementById("f_qtc").value),
-        BP: document.getElementById("f_bp").value.trim(),
-      },
-      labNotes: document.getElementById("f_labNotes").value.trim(),
+      labs: { ..._parsedLabs },
+      labNotes: _parsedLabNotes,
       prescription: "",
     };
   }
 
   function resetForm() {
     ["f_name","f_chart","f_age","f_weight","f_height","f_allergies","f_history",
-     "f_egfr","f_ast","f_k","f_na","f_qtc","f_bp","f_labNotes"].forEach(id => document.getElementById(id).value = "");
+     "f_labs_raw"].forEach(id => document.getElementById(id).value = "");
     ["f_pregnant","f_breastfeeding","f_smoker","f_alcohol"].forEach(id => document.getElementById(id).checked = false);
     selectedBase.clear();
     customBases.length = 0;
     baseList.querySelectorAll(".chip").forEach(c => c.classList.add("off"));
     renderCustom();
+    _parsedLabs     = { eGFR: null, ASTALT: "", K: null, Na: null, QTc: null, BP: "" };
+    _parsedLabNotes = "";
+    document.getElementById("labs_parsed_preview").textContent = "";
   }
 
   function showStatus(msg, color) {
@@ -254,6 +278,9 @@
     showStatus(`✓ ${patient.name} 대기열 추가 완료`);
   });
   document.getElementById("resetBtn").addEventListener("click", resetForm);
+  document.getElementById("f_labs_raw").addEventListener("input", () => {
+    parseLabText(document.getElementById("f_labs_raw").value);
+  });
 
   function renderQueue() {
     const queue = RxAssist.loadQueue();
